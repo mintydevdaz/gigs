@@ -7,6 +7,26 @@ def file_attachment(csv_file: str) -> bytes:
         return content_file.read()
 
 
+def create_email_message(
+    from_address: str,
+    to_address: str,
+    body: str,
+    html_body: str,
+    attachment: bytes,
+    attachment_name: str,
+) -> EmailMessage:
+    msg = EmailMessage()
+    msg["From"] = from_address
+    msg["To"] = to_address
+    msg["Subject"] = "Upcoming Gigs"
+    msg.set_content(body)
+    msg.set_content(html_body, subtype="html")
+    msg.add_attachment(
+        attachment, maintype="application", subtype="csv", filename=f"{attachment_name}"
+    )
+    return msg
+
+
 def plain_body(name: str) -> str:
     """Returns email body in plain text"""
     return f"""
@@ -32,29 +52,11 @@ def plain_body(name: str) -> str:
             - https://www.ticketmaster.com.au
             - http://m.ticketek.com.au
 
+            Let me know if there are others interested in receiving this email.
+
             Kind regards,
             Darren "Cool D" Chung
             """
-
-
-def create_email_message(
-    from_address: str,
-    to_address: str,
-    body: str,
-    html_body: str,
-    attachment: bytes,
-    attachment_name: str,
-) -> EmailMessage:
-    msg = EmailMessage()
-    msg["From"] = from_address
-    msg["To"] = to_address
-    msg["Subject"] = "Upcoming Gigs"
-    msg.set_content(body)
-    msg.set_content(html_body, subtype="html")
-    msg.add_attachment(
-        attachment, maintype="application", subtype="csv", filename=f"{attachment_name}"
-    )
-    return msg
 
 
 def html_body(name: str, html_table: str) -> str:
@@ -86,6 +88,7 @@ def html_body(name: str, html_table: str) -> str:
                             <li><a href="https://www.ticketmaster.com.au/browse/all-music-catid-10001/music-rid-10001">Ticketmaster</a></li>
                             <li><a href="https://premier.ticketek.com.au/shows/genre.aspx?c=2048">Ticketek</a></li>
                         </ul>
+                    <p>Let me know if there are others interested in receiving this email.</p>
                     {html_table}
                     <p>Kind regards,
                     <br>Darren "Cool D" Chung<p>
