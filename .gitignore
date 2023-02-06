@@ -162,6 +162,7 @@ cython_debug/
 
 # MacOS / Local Files
 .DS_Store
+.flake8
 gigs.code-workspace
 project/contacts.py
 project/data.jsonl
