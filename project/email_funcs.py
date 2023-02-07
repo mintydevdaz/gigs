@@ -55,7 +55,7 @@ def delete_csv(gigs_csv: str, pretty_csv: str):
             if ans in {"y", "yes"}:
                 os.remove(gigs_csv)
                 os.remove(pretty_csv)
-                print("Removed CSV files from Desktop")
+                sys.exit("Removed CSV files from Desktop")
             elif ans in {"n", "no"}:
                 sys.exit("Files NOT deleted!")
             else:
