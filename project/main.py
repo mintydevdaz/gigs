@@ -1,19 +1,23 @@
-import os
 import smtplib
 from pathlib import Path
 
-import pandas as pd
 from contacts import test_contact
 from dotenv import load_dotenv
-from email_body import create_email_message, file_attachment, html_body, plain_body
-from pretty_html_table import build_table
+from email_body import (
+    create_email_message,
+    delete_csv,
+    file_attachment,
+    html_body,
+    html_table,
+    plain_body,
+)
 
 
 def main():
     # Create path to Desktop. Filename vars.
     dir_path = str(Path.home() / "Desktop")
-    fp_gigs = "gigs.csv"
-    fp_pretty = "pretty_table.csv"
+    fp_gigs = f"{dir_path}/gigs.csv"
+    fp_pretty = f"{dir_path}/pretty_table.csv"
 
     # Environment Vars
     load_dotenv(dotenv_path=os.path.basename("gigs/.env"))
@@ -21,10 +25,10 @@ def main():
     PASSWORD = os.getenv("PASSWORD")
 
     # Prepare email attachment
-    attachment = file_attachment(f"{dir_path}/{fp_gigs}")
+    attachment = file_attachment(fp_gigs)
 
     # Create HTML table
-    table = html_table(dir_path, fp_pretty)
+    table = html_table(file_path=fp_pretty)
 
     # Login to Gmail Account
     SERVER_ADDRESS = "smtp.gmail.com"
@@ -35,6 +39,8 @@ def main():
 
         # Get each contact in contacts list
         for name, receiver in test_contact.items():
+            print(f"Preparing email for {name} ({receiver})")
+
             # Prepare body of email
             plain_text = plain_body(name)
             html_text = html_body(name, table)
@@ -54,21 +60,7 @@ def main():
             print(f"-> Email sent to {name} ({receiver})")
 
     # Remove CSV files from Desktop
-    os.remove(f"{dir_path}/{fp_gigs}")
-    os.remove(f"{dir_path}/{fp_pretty}")
-    print("Removed CSV files from Desktop")
-
-
-def html_table(directory_path: str, filename: str) -> str:
-    """Create pretty_html_table"""
-    df = pd.read_csv(f"{directory_path}/{filename}")
-    return build_table(
-        df,
-        "blue_light",
-        font_family="Open Sans, sans-serif",
-        text_align="left",
-        width="auto",
-    )
+    delete_csv(fp_gigs, fp_pretty)
 
 
 if __name__ == "__main__":
