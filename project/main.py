@@ -2,9 +2,9 @@ import os
 import smtplib
 from pathlib import Path
 
-from contacts import test_contact
+from contacts import contacts, test_contact
 from dotenv import load_dotenv
-from email_body import (create_email_message, delete_csv, file_attachment,
+from email_funcs import (create_email_message, delete_csv, file_attachment,
                         html_body, html_table, plain_body)
 
 
