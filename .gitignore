@@ -166,3 +166,4 @@ cython_debug/
 gigs.code-workspace
 project/contacts.py
 project/data.jsonl
+project/csv.py
