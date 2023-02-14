@@ -3,10 +3,16 @@ from itemloaders.processors import MapCompose, TakeFirst
 from scrapy.crawler import CrawlerProcess
 from scrapy.loader import ItemLoader
 from w3lib.html import remove_tags
+from datetime import datetime
 
 
 def title_case(value):
     return value.title()
+
+
+def phoenix_date(value):
+    v = value[0].split()
+    return f"{v[0]} {v[1][:3]} {v[2]}"
 
 
 def remove_sydney(value):
@@ -14,13 +20,13 @@ def remove_sydney(value):
 
 
 def mosh_suburb(value):
-    '''Extracts suburb from venue's address'''
+    """Extracts suburb from venue's address"""
     i = value.split(",")[-1].split()
     return " ".join(i[:-2])
 
 
 def mosh_state(value):
-    '''Extracts State from venue's address'''
+    """Extracts State from venue's address"""
     i = value.split(",")[-1].split()
     return i[-2]
 
@@ -39,9 +45,22 @@ def century_date(value):
     return f"{i[1]} {i[2][:3]} {i[3]}"
 
 
+def format_date(value):
+    if value == "01 Jan 2099":
+        return value
+    else:
+        i = datetime.strptime(value[:10], "%Y-%m-%d")
+        return i.strftime("%d %b %Y")
+
+
 class PhoenixItem(scrapy.Item):
-    Event_Date = scrapy.Field(output_processor=TakeFirst())
-    Event = scrapy.Field(input_processor=MapCompose(remove_tags, title_case), output_processor=TakeFirst())
+    Event_Date = scrapy.Field(
+        input_processor=phoenix_date, output_processor=TakeFirst()
+    )
+    Event = scrapy.Field(
+        input_processor=MapCompose(remove_tags, title_case),
+        output_processor=TakeFirst(),
+    )
     Venue = scrapy.Field(output_processor=TakeFirst())
     Location = scrapy.Field(output_processor=TakeFirst())
     State = scrapy.Field(output_processor=TakeFirst())
@@ -49,18 +68,51 @@ class PhoenixItem(scrapy.Item):
 
 
 class MoshtixItem(scrapy.Item):
-    Event_Date = scrapy.Field(input_processor=MapCompose(remove_tags, clean_date), output_processor=TakeFirst())
-    Event = scrapy.Field(input_processor=MapCompose(remove_tags, remove_space), output_processor=TakeFirst())
-    Venue = scrapy.Field(input_processor=MapCompose(remove_tags, remove_sydney, title_case), output_processor=TakeFirst())
-    Location = scrapy.Field(input_processor=MapCompose(mosh_suburb), output_processor=TakeFirst())
-    State = scrapy.Field(input_processor=MapCompose(mosh_state), output_processor=TakeFirst())
+    Event_Date = scrapy.Field(
+        input_processor=MapCompose(remove_tags, clean_date),
+        output_processor=TakeFirst(),
+    )
+    Event = scrapy.Field(
+        input_processor=MapCompose(remove_tags, remove_space),
+        output_processor=TakeFirst(),
+    )
+    Venue = scrapy.Field(
+        input_processor=MapCompose(remove_tags, remove_sydney, title_case),
+        output_processor=TakeFirst(),
+    )
+    Location = scrapy.Field(
+        input_processor=MapCompose(mosh_suburb), output_processor=TakeFirst()
+    )
+    State = scrapy.Field(
+        input_processor=MapCompose(mosh_state), output_processor=TakeFirst()
+    )
     URL = scrapy.Field(output_processor=TakeFirst())
 
 
 class CenturyItem(scrapy.Item):
-    Event_Date = scrapy.Field(input_processor=MapCompose(remove_tags, century_date), output_processor=TakeFirst())
-    Event = scrapy.Field(input_processor=MapCompose(remove_tags), output_processor=TakeFirst())
-    Venue = scrapy.Field(input_processor=MapCompose(remove_tags, title_case), output_processor=TakeFirst())
+    Event_Date = scrapy.Field(
+        input_processor=MapCompose(remove_tags, century_date),
+        output_processor=TakeFirst(),
+    )
+    Event = scrapy.Field(
+        input_processor=MapCompose(remove_tags, title_case),
+        output_processor=TakeFirst(),
+    )
+    Venue = scrapy.Field(
+        input_processor=MapCompose(remove_tags, title_case),
+        output_processor=TakeFirst(),
+    )
+    Location = scrapy.Field(input_processor=MapCompose(remove_tags), output_processor=TakeFirst())
+    State = scrapy.Field(output_processor=TakeFirst())
+    URL = scrapy.Field(output_processor=TakeFirst())
+
+
+class TicketmasterItem(scrapy.Item):
+    Event_Date = scrapy.Field(
+        input_processor=MapCompose(format_date), output_processor=TakeFirst()
+    )
+    Event = scrapy.Field(output_processor=TakeFirst())
+    Venue = scrapy.Field(output_processor=TakeFirst())
     Location = scrapy.Field(output_processor=TakeFirst())
     State = scrapy.Field(output_processor=TakeFirst())
     URL = scrapy.Field(output_processor=TakeFirst())
@@ -109,10 +161,11 @@ class MoshtixSpider(scrapy.Spider):
             yield scrapy.Request(url, callback=self.parse)
 
     def parse(self, response):
-        venue = response.css('h1.pagearticle::text').get()
-        address = response.css('div.page_headtitle.page_headtitle_withleftimage > p > a::text').get()
+        venue = response.css("h1.pagearticle::text").get()
+        address = response.css(
+            "div.page_headtitle.page_headtitle_withleftimage > p > a::text"
+        ).get()
         for event in response.css("div.searchresult_content"):
-
             loader = ItemLoader(item=MoshtixItem(), selector=event)
             loader.add_css("Event_Date", "h2.main-artist-event-header")
             loader.add_css("Event", "h2.main-event-header > a > span")
@@ -142,17 +195,53 @@ class CenturySpider(scrapy.Spider):
         container = response.css("div.grid-container.le-card-container")
         items = container.css("div.grid-x > a")
         for url in items:
-            yield scrapy.Request(url.css('a::attr("href")').get(), callback=self.parse_gig)
+            yield scrapy.Request(
+                url.css('a::attr("href")').get(), callback=self.parse_gig
+            )
 
     def parse_gig(self, response):
         loader = ItemLoader(item=CenturyItem(), selector=response)
         loader.add_css("Event_Date", "li.session-date")
         loader.add_css("Event", "h1.title")
-        loader.add_css("Venue", "h5.session-title.subtitle.hide-for-small-only.show-for-medium-up")
+        loader.add_css(
+            "Venue", "h5.session-title.subtitle.hide-for-small-only.show-for-medium-up"
+        )
         loader.add_value("Location", "Sydney")
         loader.add_value("State", "NSW")
         loader.add_value("URL", response.url)
         yield loader.load_item()
+
+
+class TicketmasterSpider(scrapy.Spider):
+    name = "ticketmaster"
+    allowed_domains = ["ticketmaster.com.au"]
+    start_urls = [
+        "https://www.ticketmaster.com.au/api/search/events/category/10001?page=0"
+    ]
+    page_num = 0
+
+    def parse(self, response):
+        json = response.json()
+        for event in json["events"]:
+            loader = ItemLoader(item=TicketmasterItem(), response=response)
+
+            # Replaces None/blank value with placeholder date
+            loader.add_value(
+                "Event_Date", event["dateStart"].get("localDate") or "01 Jan 2099"
+            )
+            loader.add_value("Event", event["title"])
+            loader.add_value("Venue", event["venue"].get("name"))
+            loader.add_value("Location", event["venue"].get("city"))
+            loader.add_value("State", event["venue"].get("state"))
+            loader.add_value("URL", response.urljoin(event['url']))
+            yield loader.load_item()
+
+        # Access next 20 urls. Stop if JSON contains no information.
+        self.page_num += 1
+        total = int(json["total"])
+        if total != 0:
+            next_page = f"https://www.ticketmaster.com.au/api/search/events/category/10001?page={self.page_num}"
+            yield response.follow(next_page, callback=self.parse)
 
 
 custom_settings = {
@@ -167,4 +256,5 @@ process = CrawlerProcess(settings=custom_settings)
 process.crawl(PhoenixSpider)
 process.crawl(MoshtixSpider)
 process.crawl(CenturySpider)
+process.crawl(TicketmasterSpider)
 process.start()
