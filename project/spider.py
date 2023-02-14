@@ -1,9 +1,11 @@
+import logging
+from datetime import datetime
+
 import scrapy
 from itemloaders.processors import MapCompose, TakeFirst
 from scrapy.crawler import CrawlerProcess
 from scrapy.loader import ItemLoader
 from w3lib.html import remove_tags
-from datetime import datetime
 
 
 def title_case(value):
@@ -45,7 +47,7 @@ def century_date(value):
     return f"{i[1]} {i[2][:3]} {i[3]}"
 
 
-def format_date(value):
+def format_date(value):  # sourcery skip: remove-unnecessary-else
     if value == "01 Jan 2099":
         return value
     else:
@@ -102,7 +104,9 @@ class CenturyItem(scrapy.Item):
         input_processor=MapCompose(remove_tags, title_case),
         output_processor=TakeFirst(),
     )
-    Location = scrapy.Field(input_processor=MapCompose(remove_tags), output_processor=TakeFirst())
+    Location = scrapy.Field(
+        input_processor=MapCompose(remove_tags), output_processor=TakeFirst()
+    )
     State = scrapy.Field(output_processor=TakeFirst())
     URL = scrapy.Field(output_processor=TakeFirst())
 
@@ -119,6 +123,7 @@ class TicketmasterItem(scrapy.Item):
 
 
 class PhoenixSpider(scrapy.Spider):
+    logging.getLogger().addHandler(logging.StreamHandler())
     name = "phoenix"
     allowed_domains = ["phoenixcentralpark.com.au"]
     start_urls = ["https://phoenixcentralpark.com.au/season-vii"]
@@ -147,6 +152,7 @@ class PhoenixSpider(scrapy.Spider):
 
 
 class MoshtixSpider(scrapy.Spider):
+    logging.getLogger().addHandler(logging.StreamHandler())
     name = "mosh"
 
     def start_requests(self):
@@ -178,6 +184,7 @@ class MoshtixSpider(scrapy.Spider):
 
 
 class CenturySpider(scrapy.Spider):
+    logging.getLogger().addHandler(logging.StreamHandler())
     name = "century"
 
     def start_requests(self):
@@ -213,6 +220,7 @@ class CenturySpider(scrapy.Spider):
 
 
 class TicketmasterSpider(scrapy.Spider):
+    logging.getLogger().addHandler(logging.StreamHandler())
     name = "ticketmaster"
     allowed_domains = ["ticketmaster.com.au"]
     start_urls = [
@@ -233,22 +241,25 @@ class TicketmasterSpider(scrapy.Spider):
             loader.add_value("Venue", event["venue"].get("name"))
             loader.add_value("Location", event["venue"].get("city"))
             loader.add_value("State", event["venue"].get("state"))
-            loader.add_value("URL", response.urljoin(event['url']))
+            loader.add_value("URL", response.urljoin(event["url"]))
             yield loader.load_item()
 
         # Access next 20 urls. Stop if JSON contains no information.
         self.page_num += 1
         total = int(json["total"])
         if total != 0:
-            next_page = f"https://www.ticketmaster.com.au/api/search/events/category/10001?page={self.page_num}"
+            next_page = f"https://www.ticketmaster.com.au/api/search/events/category/10001?page={self.page_num}" # noqa
             yield response.follow(next_page, callback=self.parse)
 
 
 custom_settings = {
+    "USER_AGENT": "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko Version/16.1 Safari/605.1.15", # noqa
     "AUTOTHROTTLE_ENABLED": True,
     "AUTOTHROTTLE_DEBUG": True,
     "ROBOTSTXT_OBEY": True,
     "FEEDS": {"data.jsonl": {"format": "jsonl", "overwrite": False}},
+    "LOG_FILE": "error_log.log",
+    "LOG_LEVEL": "ERROR",
 }
 
 
