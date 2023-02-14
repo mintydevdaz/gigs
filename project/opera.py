@@ -25,13 +25,18 @@ def opera():
     dt = convert_datetime(dates)
 
     # Create venue list
-    venues = list(itertools.repeat("Sydney Opera House", len(dates)))
+    n = len(dates)
+    venue = list(itertools.repeat("Sydney Opera House", n))
+    location = list(itertools.repeat("Sydney", n))
+    state = list(itertools.repeat("NSW", n))
 
     # Intialise & update dictionary
-    data = {"Event_Date": [], "Band": [], "Venue": [], "URL": []}
+    data = {"Event_Date": [], "Event": [], "Venue": [], "Location": [], "State": [], "URL": []}
     data["Event_Date"] += dt
-    data["Band"] += bands
-    data["Venue"] += venues
+    data["Event"] += bands
+    data["Venue"] += venue
+    data["Location"] += location
+    data["State"] += state
     data["URL"] += urls
 
     return table(data)
