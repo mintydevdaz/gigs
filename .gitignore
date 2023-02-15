@@ -165,4 +165,3 @@ cython_debug/
 .flake8
 gigs.code-workspace
 project/contacts.py
-project/data.jsonl
