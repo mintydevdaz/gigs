@@ -10,7 +10,7 @@ from email_funcs import (create_email_message, delete_csv, file_attachment,
 
 def main():
     # Create path to Desktop. Filename vars.
-    dir_path = str(Path.home() / "Desktop")
+    dir_path = str(Path.home() / "Desktop" / "csv_files")
     fp_gigs = f"{dir_path}/gigs.csv"
     fp_pretty = f"{dir_path}/pretty_table.csv"
 
