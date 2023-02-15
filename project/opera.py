@@ -1,6 +1,7 @@
 import itertools
 import sys
 from datetime import date, datetime
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -31,7 +32,15 @@ def opera():
     state = list(itertools.repeat("NSW", n))
 
     # Intialise & update dictionary
-    data = {"Event_Date": [], "Event": [], "Venue": [], "Location": [], "State": [], "URL": []}
+    data = {
+        "Event_Date": [],
+        "Event": [],
+        "Venue": [],
+        "Location": [],
+        "State": [],
+        "URL": []
+    }
+
     data["Event_Date"] += dt
     data["Event"] += bands
     data["Venue"] += venue
@@ -39,7 +48,7 @@ def opera():
     data["State"] += state
     data["URL"] += urls
 
-    return table(data)
+    save_csv(data)
 
 
 def create_url() -> str:
@@ -92,12 +101,16 @@ def convert_datetime(dates: list[str]) -> list[datetime]:
     res = []
     for d in dates:
         i = datetime.strptime(d, "%Y-%m-%d").date()
-        res.append(i)
+        j = i.strftime("%d %b %Y")
+        res.append(j)
     return res
 
 
-def table(dict_data: dict) -> pd.DataFrame:
-    return pd.DataFrame(dict_data)
+def save_csv(dict_data: dict):
+    df = pd.DataFrame(dict_data)
+    fp = str(Path.home() / "Desktop" / "csv_files" / "opera.csv")
+    df.to_csv(fp, index=False)
+    print(f"-> Saved to {fp}")
 
 
 if __name__ == "__main__":
