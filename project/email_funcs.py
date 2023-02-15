@@ -69,24 +69,10 @@ def plain_body(name: str) -> str:
     return f"""
             Dear {name},
 
-            Attached is the current list of gigs for the following venues:
-
-            - Big Top Luna Park
-            - Enmore Theatre
-            - Factory Theatre
-            - Lansdowne Hotel
-            - Lazybones Lounge
-            - Manning Bar
-            - Metro Theatre
-            - Oxford Art Factory
-            - Phoenix Central Park
-            - Sydney Opera House
-            - The Concourse
-            - UNSW Roundhouse
+            Attached is the current list of gigs.
 
             You might find more gigs here:
             - https://sydneymusic.net
-            - https://www.ticketmaster.com.au
             - http://m.ticketek.com.au
 
             Let me know if there are others interested in receiving this email.
@@ -102,27 +88,11 @@ def html_body(name: str, html_table: str) -> str:
             <html>
                 <body>
                     <p>Dear {name},</p>
-                    <p>Below is the current list of gigs for the next 30
-                    days at the following venues.
-                    Attached is a more comprehensive list.</p>
-                        <ul>
-                            <li>Big Top Luna Park</li>
-                            <li>Enmore Theatre</li>
-                            <li>Factory Theatre</li>
-                            <li>Lansdowne Hotel</li>
-                            <li>Lazybones Lounge</li>
-                            <li>Manning Bar</li>
-                            <li>Metro Theatre</li>
-                            <li>Oxford Factory Theatre</li>
-                            <li>Phoenix Central Park</li>
-                            <li>Sydney Opera House</li>
-                            <li>The Councourse</li>
-                            <li>UNSW Roundhouse</li>
-                        </ul>
+                    <p>Here are the current list of gigs for the next 30
+                    days. Attached is a more comprehensive list.</p>
                     <p>You might find more gigs here:</p>
                         <ul>
                             <li><a href="https://sydneymusic.net">Sydney Music</a></li>
-                            <li><a href="https://www.ticketmaster.com.au/browse/all-music-catid-10001/music-rid-10001">Ticketmaster</a></li>
                             <li><a href="https://premier.ticketek.com.au/shows/genre.aspx?c=2048">Ticketek</a></li>
                         </ul>
                     <p>Let me know if there are others interested in receiving this email.</p>
