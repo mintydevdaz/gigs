@@ -4,6 +4,7 @@ from pathlib import Path
 
 from opera import opera
 from spider import spider
+from ticketek import ticketek
 
 
 def main():
@@ -20,6 +21,8 @@ def main():
     # Run spider.py & opera.py
     print("-> Spinning up opera.py")
     opera()
+    print("-> Spinning up ticketek.py")
+    ticketek()
     print("-> Spinning up spider.py")
     spider()
 

@@ -73,12 +73,11 @@ def plain_body(name: str) -> str:
 
             You might find more gigs here:
             - https://sydneymusic.net
-            - http://m.ticketek.com.au
 
             Let me know if there are others interested in receiving this email.
 
             Kind regards,
-            Darren "Cool D" Chung
+            Cool D xoxo
             """
 
 
@@ -93,12 +92,11 @@ def html_body(name: str, html_table: str) -> str:
                     <p>You might find more gigs here:</p>
                         <ul>
                             <li><a href="https://sydneymusic.net">Sydney Music</a></li>
-                            <li><a href="https://premier.ticketek.com.au/shows/genre.aspx?c=2048">Ticketek</a></li>
                         </ul>
                     <p>Let me know if there are others interested in receiving this email.</p>
                     {html_table}
                     <p>Kind regards,
-                    <br>Darren "Cool D" Chung<p>
+                    <br>Cool D xoxo<p>
                 </body>
             </html>
             """

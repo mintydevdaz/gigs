@@ -9,16 +9,19 @@ def main():
     fp = str(Path.home() / "Desktop" / "csv_files")
     folder = os.listdir(fp)
 
-    # Open files in pd.DataFrame
-    df = pd.concat([pd.read_csv(f"{fp}/{csv}") for csv in folder], ignore_index=True)
+    # Open files in pd.DataFrame. Ignores hidden DS_Store file.
+    df = pd.concat(
+        [pd.read_csv(f"{fp}/{file}") for file in folder if file.endswith(".csv")],
+        ignore_index=True,
+    )
 
-    # ! Apply filtering
+    # !! Apply filtering
     # Filter NSW col
     df = df[df.State == "NSW"]
 
     # Sort by date
-    df['Event_Date'] = pd.to_datetime(df['Event_Date'], dayfirst=True)
-    df = df.sort_values(by=['Event_Date', "Event"])
+    df["Event_Date"] = pd.to_datetime(df["Event_Date"], dayfirst=True)
+    df = df.sort_values(by=["Event_Date", "Event"])
 
     # Filter dates
     start_date = str(date.today())
@@ -37,7 +40,7 @@ def main():
 def gigs_table(directory_path: str, df: pd.DataFrame):
     f = "gigs.csv"
     path = f"{directory_path}/{f}"
-    df = df.drop("Event_Date", axis="columns")
+    df = df.drop(["Event_Date", "State"], axis="columns")
     df.to_csv(path, index=False)
     print(f"Saved to {path}")
 

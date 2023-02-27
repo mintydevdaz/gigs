@@ -10,7 +10,7 @@ import requests
 def opera():
     print("Retrieving data from Sydney Opera House website")
     # Contruct unique url, get HTML response & parse JSON
-    r = get_html_response(url=create_url())
+    r = get_data(url=create_url())
     json = get_json(response=r)
 
     # # Retrieve event date, title, & url
@@ -48,7 +48,7 @@ def opera():
     data["State"] += state
     data["URL"] += urls
 
-    save_csv(data)
+    save_to_csv(data)
 
 
 def create_url() -> str:
@@ -61,7 +61,7 @@ def create_url() -> str:
     return f"https://www.sydneyoperahouse.com/bin/soh/whatsOnFilter?filterPaths=%2Fcontent%2Fsoh%2Fevents%2C%2Fcontent%2Fsoh%2Fevents%2Fwhats-on%2C%2Fcontent%2Fsoh%2Fevents%2Fwhats-on%2Fopera-australia%2F2022%2C%2Fcontent%2Fsoh%2Fevents%2Fwhats-on%2FAntidote%2F2022%2C%2Fcontent%2Fsoh%2Fevents%2Fwhats-on%2Faustralian-chamber-orchestra%2F2022-season&loadMoreNext=14&duration=14&filterType=1&limit=6&offset=0&fromDate={str(d)}&toDate={next_year}&genres=event-type%3Acontemporary-music" # noqa
 
 
-def get_html_response(url: str) -> requests.models.Response:
+def get_data(url: str) -> requests.models.Response:
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36" # noqa
@@ -106,7 +106,7 @@ def convert_datetime(dates: list[str]) -> list[datetime]:
     return res
 
 
-def save_csv(dict_data: dict):
+def save_to_csv(dict_data: dict):
     df = pd.DataFrame(dict_data)
     fp = str(Path.home() / "Desktop" / "csv_files" / "opera.csv")
     df.to_csv(fp, index=False)

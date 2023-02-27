@@ -8,6 +8,9 @@ from email_funcs import (create_email_message, delete_csv, file_attachment,
                         html_body, html_table, plain_body)
 
 
+# TODO: update deletion preferences
+
+
 def main():
     # Create path to Desktop. Filename vars.
     dir_path = str(Path.home() / "Desktop" / "csv_files")
@@ -33,7 +36,7 @@ def main():
         server.login(SENDER, PASSWORD)
 
         # Get each contact in contacts list
-        for name, receiver in test_contact.items():
+        for name, receiver in contacts.items():
             print(f"Preparing email for {name} ({receiver})")
 
             # Prepare body of email
