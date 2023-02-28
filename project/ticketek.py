@@ -55,13 +55,14 @@ def ticketek():
 
 
 def get_data(url: str) -> requests.models.Response:
-    '''Fetches a HTML response. Will exit if error occurs.
+    """Fetches a HTML response. Will exit if error occurs.
 
-    :param url: Receives a Ticketek URL
-    :type url: str
-    :return: HTML response
-    :rtype: requests.models.Response
-    '''
+    Args:
+        url (str): Ticketek's Concerts page
+
+    Returns:
+        requests.models.Response: HTML response
+    """
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"  # noqa
@@ -78,88 +79,93 @@ def get_data(url: str) -> requests.models.Response:
 
 
 def parse_data(response: requests.models.Response) -> bs4.BeautifulSoup:
-    '''Parse HTML response with Beautiful Soup
+    """Parse HTML response with Beautiful Soup
 
-    :param response: HTML response
-    :type response: requests.models.Response
-    :return: Parsed HTML data
-    :rtype: bs4.BeautifulSoup
-    '''
+    Args:
+        response (requests.models.Response): HTML response
+
+    Returns:
+        bs4.BeautifulSoup: Parsed HTML data
+    """
     return BeautifulSoup(response.text, "lxml")
 
 
 def get_events(data: bs4.BeautifulSoup) -> bs4.element.ResultSet:
-    '''Obtains all Events listed on page
+    """Fetches all events listed on webpage
 
-    :param data: HTML response from Ticketek website
-    :type data: bs4.BeautifulSoup
-    :return: All concert events
-    :rtype: bs4.element.ResultSet
-    '''
+    Args:
+        data (bs4.BeautifulSoup): Parsed HTML data
+
+    Returns:
+        bs4.element.ResultSet: All concert event wrappers on webpage
+    """
     return data.find_all('div', class_='resultModule')
 
 
 def get_event_band(event_data: bs4.element.Tag) -> str:
-    '''Get the event / band title
+    """Get the headline act for event
 
-    :param event_data: Individual event's HTML data
-    :type event_data: bs4.element.Tag
-    :return: Event / Band title
-    :rtype: str
-    '''
+    Args:
+        event_data (bs4.element.Tag): Individual event's parsed data
+
+    Returns:
+        str: Event / Band title
+    """
     return event_data.find('h6').next.strip()
 
 
 def get_event_url(event_data: bs4.element.Tag) -> str:
-    '''Get the individual event's url
+    """Fetch the individual event's URL
 
-    :param event_data: Individual event's HTML data
-    :type event_data: bs4.element.Tag
-    :return: Event URL
-    :rtype: str
-    '''
+    Args:
+        event_data (bs4.element.Tag): Event's parsed HTML data
+
+    Returns:
+        str: URL
+    """
     base = "https://premier.ticketek.com.au"
     href = event_data.find('a').get('href')
     return f"{base}{href}"
 
 
 def get_event_location(event_data: bs4.element.Tag) -> list[str]:
-    '''
-    Returns a list of strings in the index of:
+    """Returns a list of strings with the following indexes:
     0. Venue
     1. Suburb / City
     2. State
 
-    :param event_data: Location of event
-    :type event_data: bs4.element.Tag
-    :return: _description_
-    :rtype: list[str]
-    '''
+    Args:
+        event_data (bs4.element.Tag): Event location
+
+    Returns:
+        list[str]: Venue, Suburb/City, State
+    """
     location = event_data.find('div', class_='contentLocation').next.strip()
     return [i.strip() for i in location.split(",")]
 
 
 def get_event_date(event_data: bs4.element.Tag) -> str:
-    '''
-    Extracts event's date. Will re-format to 01-Jan-2099 if date contains "TBC".
+    """Extracts event's date. Will re-format to 01-Jan-2099 if date contains "TBC".
 
-    :param event_data: Individual event's HTML data
-    :type event_data: bs4.element.Tag
-    :return: Date formatted as string
-    :rtype: str
-    '''
+    Args:
+        event_data (bs4.element.Tag): Event's parsed HTML data
+
+    Returns:
+        str: Date formatted as string
+    """
     date = event_data.find('div', class_='contentDate').next.strip()
     return "01 Jan 2099" if "TBC" in date.upper() else date[4:15]
 
 
 def save_to_csv(gig_list: list) -> csv:
-    '''Convert data list to .csv file
+    """Converts List of data to .csv file. 
 
-    :param gig_list: List of scraped event data
-    :type gig_list: list
-    :return: Saves csv file to Desktop path
-    :rtype: csv
-    '''
+    Args:
+        gig_list (list): List of scraped event data
+
+    Returns:
+        csv: Saves .csv file to Desktop path
+    """
     path = str(Path.home() / "Desktop" / "csv_files")
     with open(f"{path}/ticketek.csv", "w") as f:
         # Write headers to top of file

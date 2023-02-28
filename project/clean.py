@@ -1,4 +1,5 @@
 import os
+import sys
 import pandas as pd
 from pathlib import Path
 from datetime import date, timedelta
@@ -8,25 +9,35 @@ from datetime import date, timedelta
 
 
 def main():
-    # Get filepath & list of filepath objects
-    fp = str(Path.home() / "Desktop" / "csv_files")
-    folder = os.listdir(fp)
+    # Set vars
+    start_date = str(date.today())
+    end_date_month = str(date.today() + timedelta(days=30))
+    end_date_year = str(date.today() + timedelta(days=365))
 
-    # Create DataFrame
-    df = open_table(fp, folder)
+    try:
+        # Get filepath & list of filepath objects
+        fp = str(Path.home() / "Desktop" / "csv_files")
+        folder = os.listdir(fp)
 
-    # Sort by Date
-    df = sort_table(df)
+        # Create DataFrame
+        df = open_table(fp, folder)
 
-    # Filter by Date & State
-    df = filter_table(df)
+        # Sort by Date
+        df = sort_table(df)
 
-    # Create 'Date' column
-    df = create_date_column(df)
+        # Filter Date & State
+        df = filter_table(df, start_date, end_date_year)
 
-    # Prepare two CSV files for emailing
-    gigs_table(fp, df)
-    pretty_table(fp, df)
+        # Create new 'Date' column
+        df = create_date_column(df)
+
+        # Prepare two CSV files for emailing
+        gigs_table(fp, df)
+        pretty_table(fp, df, end_date_month)
+
+    except FileNotFoundError as e:
+        sys.exit(e)
+        sys.executable
 
 
 def open_table(file_path: str, folder: list[str]) -> pd.DataFrame:
@@ -64,9 +75,17 @@ def sort_table(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def filter_table(df: pd.DataFrame) -> pd.DataFrame:
-    start_date = str(date.today())
-    end_date = str(date.today() + timedelta(days=365))
+def filter_table(df: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
+    """Selects 365 days of data (from today). Selects gigs only in NSW.
+
+    Args:
+        df (pd.DataFrame): Pandas DataFrame
+        start_date (str): Today's date
+        end_date (str): 365 days from today
+
+    Returns:
+        pd.DataFrame: Filtered DataFrame
+    """
     df = df.query("Event_Date > @start_date and Event_Date < @end_date")
     df = df[df.State == "NSW"]
     return df
@@ -97,28 +116,25 @@ def gigs_table(directory_path: str, df: pd.DataFrame):
         csv: CSV file
     """
     df = df.drop(["Event_Date", "State"], axis="columns")
-    path = f"{directory_path}/gigs.csv"
-    df.to_csv(path, index=False)
-    print(f"Saved to {path}")
+    df.to_csv(path_or_buf=f"{directory_path}/gigs.csv", index=False)
 
 
-def pretty_table(directory_path: str, df: pd.DataFrame):
+def pretty_table(directory_path: str, df: pd.DataFrame, end_date: str):
     """Saves a CSV file of gigs for 30 days from today.
+    Only grabs gigs up to the 30th day and removes the Event_Date & State columns.
 
     Args:
         directory_path (str): Hard-coded path to folder on Desktop
         df (pd.DataFrame): DataFrame containing all gigs
+        end_date (str): 30 days from today's date
 
     Returns:
         csv: CSV file
     """
-    start_date = str(date.today())
-    end_date = str(date.today() + timedelta(days=30))
-    df = df.query("Event_Date > @start_date and Event_Date < @end_date")
-    df = df.drop("Event_Date", axis="columns")
-    path = f"{directory_path}/pretty_table.csv"
-    df.to_csv(path, index=False)
-    print(f"Saved to {path}")
+    df = df.query("Event_Date < @end_date").drop(
+        ["Event_Date", "State"], axis="columns"
+    )
+    df.to_csv(path_or_buf=f"{directory_path}/pretty_table.csv", index=False)
 
 
 if __name__ == "__main__":

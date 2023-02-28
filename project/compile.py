@@ -8,7 +8,6 @@ from ticketek import ticketek
 
 
 def main():
-    # Create folder on Desktop
     try:
         folder = "csv_files"
         parent_dir = str(Path.home() / "Desktop/")
@@ -18,12 +17,9 @@ def main():
     except OSError as err:
         sys.exit(f"-> Operation aborted: ***{err}***")
 
-    # Run spider.py & opera.py
-    print("-> Spinning up opera.py")
+    print("-> Fetching gig data...")
     opera()
-    print("-> Spinning up ticketek.py")
     ticketek()
-    print("-> Spinning up spider.py")
     spider()
 
     # List directory files
