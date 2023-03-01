@@ -35,8 +35,9 @@ def main():
         server.starttls()
         server.login(SENDER, PASSWORD)
 
+        # !! TOGGLE test_contact v contacts
         # Get each contact in contacts list
-        for name, receiver in contacts.items():
+        for name, receiver in test_contact.items():
             print(f"Preparing email for {name} ({receiver})")
 
             # Prepare body of email

@@ -6,9 +6,11 @@ from datetime import date, timedelta
 
 
 # TODO: DROP DUPES
+# TODO: standardise text in Event / Venue columns
+# TODO: remove &amp;
 
 
-def main():
+def main():  # sourcery skip: extract-method
     # Set vars
     start_date = str(date.today())
     end_date_month = str(date.today() + timedelta(days=30))
@@ -28,6 +30,9 @@ def main():
         # Filter Date & State
         df = filter_table(df, start_date, end_date_year)
 
+        # Remove duplicates
+        df = remove_duplicates(df)
+
         # Create new 'Date' column
         df = create_date_column(df)
 
@@ -37,7 +42,6 @@ def main():
 
     except FileNotFoundError as e:
         sys.exit(e)
-        sys.executable
 
 
 def open_table(file_path: str, folder: list[str]) -> pd.DataFrame:
@@ -89,6 +93,20 @@ def filter_table(df: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFra
     df = df.query("Event_Date > @start_date and Event_Date < @end_date")
     df = df[df.State == "NSW"]
     return df
+
+
+def remove_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+    """Removes duplicate events based on matching values in Event & Venue columns.
+
+    Args:
+        df (pd.DataFrame): Pandas DataFrame.
+
+    Returns:
+        pd.DataFrame: DataFrame minus duplicates
+    """
+    return df.drop_duplicates(
+        subset=["Event", "Venue"], keep="last", ignore_index=True
+    )
 
 
 def create_date_column(df: pd.DataFrame) -> pd.DataFrame:
