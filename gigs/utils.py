@@ -56,37 +56,21 @@ headers = {
 
 def get_request(url: str, headers: dict[str, str]) -> httpx.Response | None:
     """
-    Sends a GET request to the specified URL with the provided headers and returns the
-    response.
-
-    The function uses the `httpx` library to send a GET request to the given URL with
-    the specified headers. If the request is successful (status code 2xx), the response
-    is returned. If an HTTP error occurs, an error message is logged and `None` is
-    returned.
+    Sends a GET request to the specified URL with the provided headers and returns the response.
 
     Args:
         url (str): The URL to send the GET request to.
         headers (dict): The headers to include in the request.
 
     Returns:
-        httpx.Response | None: The response object if the request is successful, or
-        `None` if an HTTP error occurs.
-
-    Example:
-        ```python
-        url = "https://api.example.com/data"
-        headers = {"Authorization": "Bearer token"}
-        response = get_request(url, headers)
-        if response is not None:
-            print(response.status_code)  # Output: 200
-        ```
+        httpx.Response | None: The response object if the request is successful, or `None` if an HTTP error occurs.
     """
     try:
         response = httpx.get(url, headers=headers, follow_redirects=True)
         response.raise_for_status()
         return response
     except httpx.HTTPError as exc:
-        logging.error(f"Request error occurred: {exc}.")
+        logging.error(f"Request error occurred for URL '{url}': {exc}.")
         return None
 
 
