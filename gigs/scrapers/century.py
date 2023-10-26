@@ -114,7 +114,20 @@ def fetch_event_urls(venues: list[dict], tags: str) -> list[dict]:
 
 
 def extract_ticket_prices(tree: HTMLParser) -> str:
-    """Extracts all the prices present on webpage."""
+    """
+    Extracts ticket prices from an HTMLParser tree.
+
+    Args:
+        tree (HTMLParser): The HTMLParser tree representing the parsed HTML.
+
+    Returns:
+        str: The extracted ticket prices as a string.
+
+    Examples:
+        >>> html_tree = HTMLParser(html_content)
+        >>> extract_ticket_prices(html_tree)
+        'Ticket prices: $10 - $20'
+    """
     result = ""
     for text in tree.css("ul.sessions"):
         try:
@@ -126,7 +139,20 @@ def extract_ticket_prices(tree: HTMLParser) -> str:
 
 
 def fetch_price(text: str) -> float:
-    """Identifies the lowest price within subset of text string of prices."""
+    """
+    Fetches the minimum price from a string of text containing prices.
+
+    Args:
+        text (str): The text containing prices.
+
+    Returns:
+        float: The minimum price extracted from the text. Returns 0.0 if no prices are found.
+
+    Examples:
+        >>> text = "Ticket prices: $10, $15, $20"
+        >>> fetch_price(text)
+        10.0
+    """
     result = re.findall(pattern=r"\d+\.\d+", string=text)
     if len(result) == 0:
         return 0.0
@@ -135,11 +161,42 @@ def fetch_price(text: str) -> float:
 
 
 def fetch_genre(html: HTMLParser) -> str:
+    """
+    Fetches the genre from an HTMLParser object.
+
+    Args:
+        html (HTMLParser): The HTMLParser object representing the parsed HTML.
+
+    Returns:
+        str: The fetched genre. Returns "-" if the genre is not found.
+
+    Examples:
+        >>> html_tree = HTMLParser(html_content)
+        >>> fetch_genre(html_tree)
+        'Rock'
+    """
     node = html.css_first("ul.category.inline-list").last_child
     return "-" if node is None else node.text().strip()
 
 
 def fetch_image(html: HTMLParser) -> str:
+    """
+    Fetches the image URL from an HTMLParser object.
+
+    Args:
+        html (HTMLParser): The HTMLParser object representing the parsed HTML.
+
+    Returns:
+        str: The fetched image URL.
+
+    Raises:
+        StopIteration: If no image URL is found.
+
+    Examples:
+        >>> html_tree = HTMLParser(html_content)
+        >>> fetch_image(html_tree)
+        'https://example.com/image.jpg'
+    """
     card = html.css("div#row-inner-event-hero > div.cell.small-24")
     for img in card:
         image_urls = img.css_first("style").text().strip().split(" ")
