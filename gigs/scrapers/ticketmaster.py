@@ -27,7 +27,7 @@ class Gig(BaseModel):
     @field_validator("event_date")
     def convert_date(cls, v):
         dt = datetime.strptime(v, "%Y-%m-%d")
-        return dt.strftime("%d %b %Y")
+        return dt.isoformat()
 
     @field_validator("title")
     def remove_accents(cls, text):
@@ -102,20 +102,22 @@ def get_min_price(data: dict) -> float:
 def fetch_data(cache_data: list[dict]) -> list[dict]:
     result = []
     for data in cache_data:
+        url = data.get("url", "-")
+        venue = data["_embedded"]["venues"][0]
         try:
             gig = Gig(
                 event_date=data["dates"]["start"]["localDate"],
                 title=data["name"],
                 price=get_min_price(data),
-                venue=data["_embedded"]["venues"][0]["name"],
-                suburb=data["_embedded"]["venues"][0]["city"]["name"],
-                state=data["_embedded"]["venues"][0]["state"]["stateCode"],
-                url=data["url"],
+                venue=venue["name"],
+                suburb=venue["city"]["name"],
+                state=venue["state"]["stateCode"],
+                url=url,
                 image=data["images"][0]["url"],
             )
             result.append(gig.model_dump())
         except Exception as exc:
-            logging.error(f"Unable to fetch data: {exc} ({data.get('url')})")
+            logging.error(f"Unable to fetch data from URL '{url}': {exc}.")
     return result
 
 
