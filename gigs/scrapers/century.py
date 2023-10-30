@@ -12,10 +12,11 @@ from gigs.CONSTANTS import CENTURY_VENUES
 from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
 
 # ! Mon, 30 Oct 2023
-# * Scrape time is jumping around: last is 2m 48s.
+# * Scrape time is jumping around. If time is slow again, change back time parser.
+# * 1. 2m 48s
 # * 2. 1m 56s
 # * 3. 1m 05s
-# * If time is slow again, change back time parser.
+# * 4. 58s
 
 
 class CenturyGig(Gig):
@@ -23,11 +24,6 @@ class CenturyGig(Gig):
 
     @field_validator("date")
     def clean_date(cls, dt_string):
-        # dt = v.split(" ")
-        # if len(dt) <= 4:
-        #     return f"{dt[1]} {dt[2][:3]} {dt[3]}"
-        # parse_dt = datetime.strptime(f"{dt[1]} {dt[2]} {dt[3]}", "%d %B %Y")
-        # return parse_dt.isoformat()
         fmt = "%A, %d %B %Y %I:%M %p"
         return datetime.strptime(dt_string, fmt).isoformat()
 
@@ -38,19 +34,17 @@ class CenturyGig(Gig):
         )
 
     @field_validator("genre")
-    def clean_genre(cls, raw_text):
-        clean_text = ""
-        replacements = {
-            "Music - ": "Music",
-            "Comedy": "Comedy",
-            "Arts": "Arts",
-            "Other - ": ""
-        }
-        for k, v in replacements.items():
-            if k in raw_text:
-                clean_text = raw_text.replace(k, v).strip()
-        return clean_text
-
+    def clean_genre(cls, text):
+        if "Music - " in text:
+            return text.replace("Music - ", "").strip()
+        elif "Comedy" in text:
+            return "Comedy"
+        elif "Arts" in text:
+            return "Arts"
+        elif "Other" in text:
+            return text.replace("Other - ", "").strip()
+        else:
+            return "-"
 
 
 def get_event_cards(venues: list[dict], tag: str) -> list[dict]:
