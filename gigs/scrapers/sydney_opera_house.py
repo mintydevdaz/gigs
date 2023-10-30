@@ -91,9 +91,8 @@ def get_date(card: Node, date_tag: str) -> str:
     return date[-1].text().strip()
 
 
-def fetch_title(card: selectolax.parser.Node, node_title: str) -> str:
-    title = card.css_first(node_title)
-    return title.text().strip()
+def get_title(card: Node, title_tag: str) -> str:
+    return card.css_first(title_tag).text().strip()
 
 
 def fetch_genre(card: selectolax.parser.Node, node_genre: str) -> str:
@@ -118,7 +117,7 @@ def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list
         try:
             gig = SydneyOperaHouseGig(
                 date=get_date(card, date_tag),
-                title=fetch_title(card, title_tag),
+                title=get_title(card, title_tag),
                 genre=fetch_genre(card, genre_tag),
                 url=fetch_url(card, base_url),
                 image=fetch_image(card, base_url),
