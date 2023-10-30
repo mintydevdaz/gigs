@@ -99,7 +99,7 @@ def get_genre(card: Node, genre_tag: str) -> str:
     return card.css_first(genre_tag).text()
 
 
-def fetch_url(card: selectolax.parser.Node, base_url: str) -> str:
+def create_url(card: Node, base_url: str) -> str:
     href = card.css_first("a").attributes["href"]
     return f"{base_url}{href}"
 
@@ -118,7 +118,7 @@ def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list
                 date=get_date(card, date_tag),
                 title=get_title(card, title_tag),
                 genre=get_genre(card, genre_tag),
-                url=fetch_url(card, base_url),
+                url=create_url(card, base_url),
                 image=fetch_image(card, base_url),
             )
             result.append(gig.model_dump())
