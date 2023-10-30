@@ -1,4 +1,3 @@
-import datetime
 import logging
 import os
 import sys
@@ -20,7 +19,7 @@ class PhoenixGig(Gig):
     source: str = "Phoenix Central Park"
 
     @field_validator("date")
-    def check_valid_date(cls, date_str):
+    def clean_date(cls, date_str):
         fmt = "%d %b %Y"
         return format_date(date_str, fmt)
 
@@ -34,7 +33,7 @@ class PhoenixGig(Gig):
 def format_date(date_str: str, fmt: str) -> str:
     if "—" not in date_str:
         return datetime.strptime(date_str, fmt).isoformat()
-    split = date_str.split("—")  # an 'em dash', not a hyphen / 1—4 Nov 2023
+    split = date_str.split("—")  # an 'em dash', not a hyphen | 1—4 Nov 2023
     new_date = f"{split[0]}{split[1][1:]}"
     return datetime.strptime(new_date, fmt).isoformat()
 
