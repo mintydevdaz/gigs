@@ -11,21 +11,14 @@ from selectolax.parser import HTMLParser
 from gigs.CONSTANTS import CENTURY_VENUES
 from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
 
-# ! Mon, 30 Oct 2023
-# * Scrape time is jumping around. If time is slow again, change back time parser.
-# * 1. 2m 48s
-# * 2. 1m 56s
-# * 3. 1m 05s
-# * 4. 58s
-
 
 class CenturyGig(Gig):
     source: str = "Century"
 
     @field_validator("date")
-    def clean_date(cls, dt_string):
+    def clean_date(cls, date_str):
         fmt = "%A, %d %B %Y %I:%M %p"  # Tuesday, 09 January 2024 07:00 PM
-        return datetime.strptime(dt_string, fmt).isoformat()
+        return datetime.strptime(date_str, fmt).isoformat()
 
     @field_validator("title")
     def remove_accents(cls, text):
