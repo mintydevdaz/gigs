@@ -1,7 +1,9 @@
+from curses.ascii import isspace
 import logging
 import os
 import sys
 import unicodedata
+from datetime import datetime
 
 import httpx
 import selectolax
@@ -18,8 +20,13 @@ class SydneyOperaHouseGig(Gig):
     source: str = "Sydney Opera House"
 
     @field_validator("date")
-    def clean_date(cls, v):
-        return f"0{v}" if v[1].isspace() else v
+    def clean_date(cls, date_str):
+        fmt = "%d %b %Y"
+        return (
+            format_date(f"0{date_str}", fmt)
+            if date_str[1].isspace()
+            else format_date(date_str, fmt)
+        )
 
     @field_validator("title")
     def remove_accents(cls, text):
@@ -65,7 +72,11 @@ def get_event_cards(base_url: str, end_page: int, tag: str) -> list[Node]:
     return result
 
 
-def fetch_date(card: selectolax.parser.Node, node_date: str) -> str:
+def format_date(date_str: str, format_str: str) -> str:
+    return datetime.strptime(date_str, format_str).isoformat()
+
+
+def get_date(card: Node, date_tag: str) -> str:
     """
     Fetches the date from a given card using the specified node_date.
 
@@ -76,7 +87,7 @@ def fetch_date(card: selectolax.parser.Node, node_date: str) -> str:
     Returns:
         str: The fetched date, stripped of leading and trailing whitespace.
     """
-    date = card.css(node_date)
+    date = card.css(date_tag)
     return date[-1].text().strip()
 
 
@@ -106,7 +117,7 @@ def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list
     for card in cards:
         try:
             gig = SydneyOperaHouseGig(
-                date=fetch_date(card, date_tag),
+                date=get_date(card, date_tag),
                 title=fetch_title(card, title_tag),
                 genre=fetch_genre(card, genre_tag),
                 url=fetch_url(card, base_url),
@@ -138,7 +149,6 @@ def sydney_opera_house():
     if not len(cards):
         logging.error("No events found on page.")
         sys.exit(1)
-    print(cards)
 
     data = get_data(cards, DATE_TAG, TITLE_TAG, GENRE_TAG)
     logging.warning(f"Found {len(data)} events.")
