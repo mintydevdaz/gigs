@@ -4,6 +4,20 @@ import os
 import time
 
 import httpx
+from pydantic import BaseModel
+
+
+class Gig(BaseModel):
+    date: str = "2099-01-01T00:00:00"
+    title: str = "-"
+    price: float = 0.0
+    genre: str = "-"
+    venue: str = "-"
+    suburb: str = "-"
+    state: str = "-"
+    url: str = "-"
+    image: str = "-"
+    source: str = "-"
 
 
 def save_path(sub_dir: str, filename: str) -> str:
@@ -45,7 +59,9 @@ def logger(filepath: str):
                 datefmt="%d-%b-%y %H:%M:%S",
             )
             return func()
+
         return wrapper
+
     return decorator
 
 
@@ -110,4 +126,5 @@ def timer(func):
         total = end - start
         elapsed_time = f"Elapsed Time: {total:.6f} secs ~ {total / 60:.2f} mins."
         logging.warning(elapsed_time)
+
     return wrapper
