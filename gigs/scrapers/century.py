@@ -5,33 +5,31 @@ import unicodedata
 from datetime import datetime
 
 import httpx
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
 from gigs.CONSTANTS import CENTURY_VENUES
-from gigs.utils import export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
+
+# ! Mon, 30 Oct 2023
+# * Scrape time is jumping around: last is 2m 48s.
+# * 2. 1m 56s
+# * 3. 1m 05s
+# * If time is slow again, change back time parser.
 
 
-class Gig(BaseModel):
-    event_date: str = "-"
-    title: str = "-"
-    price: float = 0.0
-    genre: str = "-"
-    venue: str = "-"
-    suburb: str = "-"
-    state: str = "-"
-    url: str = "-"
-    image: str = "-"
+class CenturyGig(Gig):
     source: str = "Century"
 
-    @field_validator("event_date")
-    def clean_date(cls, v):
-        dt = v.split(" ")
-        if len(dt) <= 4:
-            return f"{dt[1]} {dt[2][:3]} {dt[3]}"
-        parse_dt = datetime.strptime(f"{dt[1]} {dt[2]} {dt[3]}", "%d %B %Y")
-        # return parse_dt.strftime("%d %b %Y")
-        return parse_dt.isoformat()
+    @field_validator("date")
+    def clean_date(cls, dt_string):
+        # dt = v.split(" ")
+        # if len(dt) <= 4:
+        #     return f"{dt[1]} {dt[2][:3]} {dt[3]}"
+        # parse_dt = datetime.strptime(f"{dt[1]} {dt[2]} {dt[3]}", "%d %B %Y")
+        # return parse_dt.isoformat()
+        fmt = "%A, %d %B %Y %I:%M %p"
+        return datetime.strptime(dt_string, fmt).isoformat()
 
     @field_validator("title")
     def remove_accents(cls, text):
@@ -40,20 +38,32 @@ class Gig(BaseModel):
         )
 
     @field_validator("genre")
-    def clean_genre(cls, text):
-        if "Music - " in text:
-            return text.replace("Music - ", "").strip()
-        elif "Comedy" in text:
-            return "Comedy"
-        elif "Arts" in text:
-            return "Arts"
-        elif "Other" in text:
-            return text.replace("Other - ", "").strip()
-        else:
-            return "-"
+    def clean_genre(cls, raw_text):
+        # if "Music - " in text:
+        #     return text.replace("Music - ", "").strip()
+        # elif "Comedy" in text:
+        #     return "Comedy"
+        # elif "Arts" in text:
+        #     return "Arts"
+        # elif "Other" in text:
+        #     return text.replace("Other - ", "").strip()
+        # else:
+        #     return "-"
+        clean_text = ""
+        replacements = {
+            "Music - ": "Music",
+            "Comedy": "Comedy",
+            "Arts": "Arts",
+            "Other - ": ""
+        }
+        for k, v in replacements.items():
+            if k in raw_text:
+                clean_text = raw_text.replace(k, v).strip()
+        return clean_text
 
 
-def fetch_event_urls(venues: list[dict], tags: str) -> list[dict]:
+
+def get_event_cards(venues: list[dict], tag: str) -> list[dict]:
     """
     Fetches event URLs from a list of venues based on specified tags.
 
@@ -97,7 +107,7 @@ def fetch_event_urls(venues: list[dict], tags: str) -> list[dict]:
 
         try:
             tree = HTMLParser(response.text)
-            cards = tree.css(tags)
+            cards = tree.css(tag)
             result.extend(
                 {
                     "url": card.css_first("a").attributes["href"],
@@ -138,7 +148,7 @@ def extract_ticket_prices(tree: HTMLParser) -> str:
     return result
 
 
-def fetch_price(text: str) -> float:
+def get_price(text: str) -> float:
     """
     Fetches the minimum price from a string of text containing prices.
 
@@ -160,7 +170,7 @@ def fetch_price(text: str) -> float:
     return min(prices)
 
 
-def fetch_genre(html: HTMLParser) -> str:
+def get_genre(html: HTMLParser) -> str:
     """
     Fetches the genre from an HTMLParser object.
 
@@ -179,7 +189,7 @@ def fetch_genre(html: HTMLParser) -> str:
     return "-" if node is None else node.text().strip()
 
 
-def fetch_image(html: HTMLParser) -> str:
+def get_image(html: HTMLParser) -> str:
     """
     Fetches the image URL from an HTMLParser object.
 
@@ -203,27 +213,29 @@ def fetch_image(html: HTMLParser) -> str:
     return next(url for url in image_urls if "http" in url)  # type: ignore
 
 
-def fetch_event_data(urls: list[dict]) -> list[dict]:
+def get_data(cards: list[dict]) -> list[dict]:
     result = []
     with httpx.Client(headers=headers) as client:
-        for url in urls:
+        for card in cards:
             try:
-                response = client.get(url["url"])
+                response = client.get(card["url"])
                 tree = HTMLParser(response.text)
-                gig = Gig(
-                    event_date=tree.css_first("li.session-date").text(),
+                gig = CenturyGig(
+                    date=tree.css_first("li.session-date").text(),
                     title=tree.css_first("h1.title").text(),
-                    price=fetch_price(text=extract_ticket_prices(tree)),
-                    genre=fetch_genre(tree),
-                    venue=url["name"],
-                    suburb=url["suburb"],
-                    state=url["state"],
-                    url=url["url"],
-                    image=fetch_image(tree),
+                    price=get_price(text=extract_ticket_prices(tree)),
+                    genre=get_genre(tree),
+                    venue=card["name"],
+                    suburb=card["suburb"],
+                    state=card["state"],
+                    url=card["url"],
+                    image=get_image(tree),
                 )
                 result.append(gig.model_dump())
             except Exception as exc:
-                logging.error(f"Unable to extract data from URL '{url['url']}': {exc}.")
+                logging.error(
+                    f"Unable to extract data from URL '{card['url']}': {exc}."
+                )
     return result
 
 
@@ -232,8 +244,8 @@ def fetch_event_data(urls: list[dict]) -> list[dict]:
 def century():
     logging.warning(f"Running {os.path.basename(__file__)}")
     CARD_TAG = "div#row-inner-search > a"
-    urls = fetch_event_urls(venues=CENTURY_VENUES, tags=CARD_TAG)
-    data = fetch_event_data(urls)
+    cards = get_event_cards(venues=CENTURY_VENUES, tag=CARD_TAG)
+    data = get_data(cards)
     logging.warning(f"Found {len(data)} events.")
     export_json(data, filepath=save_path("data", "century.json"))
 
