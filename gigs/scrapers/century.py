@@ -39,16 +39,6 @@ class CenturyGig(Gig):
 
     @field_validator("genre")
     def clean_genre(cls, raw_text):
-        # if "Music - " in text:
-        #     return text.replace("Music - ", "").strip()
-        # elif "Comedy" in text:
-        #     return "Comedy"
-        # elif "Arts" in text:
-        #     return "Arts"
-        # elif "Other" in text:
-        #     return text.replace("Other - ", "").strip()
-        # else:
-        #     return "-"
         clean_text = ""
         replacements = {
             "Music - ": "Music",
