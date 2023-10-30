@@ -92,7 +92,7 @@ def add_to_json(venues: dict, locations: list[tuple]) -> dict:
 def moshtix_fetch_venue():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    data = open_json(filepath=save_path("data", "mtix_price.json"))
+    data = open_json(filepath=save_path("data", "mtix_cache.json"))
     venues = open_json(filepath=save_path("data", "mtix_venues.json"))
     success1, errors1 = add_venue_info(data, venues)
 
