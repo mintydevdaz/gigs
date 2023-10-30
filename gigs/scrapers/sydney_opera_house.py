@@ -104,7 +104,7 @@ def create_url(card: Node, base_url: str) -> str:
     return f"{base_url}{href}"
 
 
-def fetch_image(card: selectolax.parser.Node, base_url: str) -> str:
+def get_image(card: Node, base_url: str) -> str:
     src_link = card.css_first("img").attributes["src"]
     return f"{base_url}{src_link}"
 
@@ -119,7 +119,7 @@ def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list
                 title=get_title(card, title_tag),
                 genre=get_genre(card, genre_tag),
                 url=create_url(card, base_url),
-                image=fetch_image(card, base_url),
+                image=get_image(card, base_url),
             )
             result.append(gig.model_dump())
         except Exception as exc:
