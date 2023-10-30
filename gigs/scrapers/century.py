@@ -227,10 +227,14 @@ def get_data(cards: list[dict]) -> list[dict]:
 @logger(filepath=save_path("data", "app.log"))
 def century():
     logging.warning(f"Running {os.path.basename(__file__)}")
+
+    # Variables
     CARD_TAG = "div#row-inner-search > a"
+
     cards = get_event_cards(venues=CENTURY_VENUES, tag=CARD_TAG)
     data = get_data(cards)
     logging.warning(f"Found {len(data)} events.")
+
     export_json(data, filepath=save_path("data", "century.json"))
 
 
