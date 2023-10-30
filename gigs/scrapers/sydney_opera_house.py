@@ -3,26 +3,21 @@ import os
 import sys
 import unicodedata
 
+import httpx
 import selectolax
-from pydantic import BaseModel, field_validator
-from selectolax.parser import HTMLParser
+from pydantic import field_validator
+from selectolax.parser import HTMLParser, Node
 
-from gigs.utils import export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
 
 
-class Gig(BaseModel):
-    event_date: str
-    title: str = "-"
-    price: float = 0.0
-    genre: str = "-"
+class SydneyOperaHouseGig(Gig):
     venue: str = "Sydney Opera House"
     suburb: str = "Sydney"
     state: str = "NSW"
-    url: str = "-"
-    image: str = "-"
     source: str = "Sydney Opera House"
 
-    @field_validator("event_date")
+    @field_validator("date")
     def clean_date(cls, v):
         return f"0{v}" if v[1].isspace() else v
 
@@ -33,43 +28,9 @@ class Gig(BaseModel):
         )
 
 
-def find_last_page(base_url: str) -> int | None:
-    url = f"{base_url}{0}"
-    response = get_request(url, headers)
-    if response is None:
-        logging.error(f"Error fetching response for {url}.")
-        return None
-    tree = HTMLParser(response.text)
-    return get_page_num(tree)
-
-
-def get_page_num(tree: HTMLParser) -> int | None:
-    """
-    Returns the page number extracted from the given HTMLParser tree.
-
-    Args:
-        tree (HTMLParser): The HTMLParser tree containing the page information.
-
-    Returns:
-        int | None: The extracted page number, incremented by 1. Returns None if the
-        page number cannot be extracted.
-
-    Raises:
-        ValueError: Raised when the extracted page number cannot be converted to an
-        integer.
-
-    Example:
-        ```python
-        tree = HTMLParser()
-        page_num = get_page_num(tree)
-        if page_num is not None:
-            print(f"Page number: {page_num}")
-        else:
-            print("Failed to extract page number.")
-        ```
-    """
-    node = "li.pager__item.pager__item--last > a"
-    end_page = tree.css_first(node).attributes.get("href")
+def page_num(html: HTMLParser) -> int | None:
+    tag = "li.pager__item.pager__item--last > a"
+    end_page = html.css_first(tag).attributes.get("href")
     if end_page is None:
         return None
     try:
@@ -80,39 +41,28 @@ def get_page_num(tree: HTMLParser) -> int | None:
         return None
 
 
-def get_event_cards(base_url: str, end_page: int, node_card: str) -> list:
-    """
-    Retrieves event cards from the specified base URL and range of pages.
+def find_last_page(base_url: str) -> int | None:
+    url = f"{base_url}{0}"
+    response = get_request(url, headers)
+    if response is None:
+        logging.error(f"Error fetching response for {url}.")
+        return None
+    tree = HTMLParser(response.text)
+    return page_num(tree)
 
-    Args:
-        base_url (str): The base URL for the event cards.
-        end_page (int): The end page number (exclusive) to retrieve event cards from.
-        node_card (str): The CSS selector for the event card elements.
 
-    Returns:
-        list: A list of event cards retrieved from the specified pages.
-
-    Example:
-        ```python
-        base_url = "https://www.example.com/events?page="
-        end_page = 5
-        node_card = ".event-card"
-        event_cards = get_event_cards(base_url, end_page, node_card)
-        for card in event_cards:
-            print(card)
-        ```
-    """
-    results = []
-    for page_num in range(end_page):
-        url = f"{base_url}{page_num}"
-        response = get_request(url, headers)
-        if response is not None:
+def get_event_cards(base_url: str, end_page: int, tag: str) -> list[Node]:
+    result = []
+    with httpx.Client(headers=headers) as client:
+        for page_num in range(end_page):
+            url = f"{base_url}{page_num}"
             try:
+                response = client.get(url)
                 tree = HTMLParser(response.text)
-                results.extend(tree.css(node_card))
+                result.extend(tree.css(tag))
             except Exception as exc:
-                logging.error(f"Error fetching cards: {exc}")
-    return results
+                logging.error(f"Error fetching cards at URL '{url}': {exc}.")
+    return result
 
 
 def fetch_date(card: selectolax.parser.Node, node_date: str) -> str:
@@ -150,43 +100,15 @@ def fetch_image(card: selectolax.parser.Node, base_url: str) -> str:
     return f"{base_url}{src_link}"
 
 
-def fetch_card_data(
-    cards: list, node_date: str, node_title: str, node_genre: str
-) -> list[dict]:
-    """
-    Fetches card data from the specified list of cards.
-
-    Args:
-        cards (list): A list of cards to fetch data from.
-        node_date (str): The CSS selector for the date element in each card.
-        node_title (str): The CSS selector for the title element in each card.
-        node_genre (str): The CSS selector for the genre element in each card.
-
-    Returns:
-        list[dict]: A list of dictionaries containing the fetched card data.
-
-    Example:
-        ```python
-        cards = [
-            {"date": "2022-01-01", "title": "Event 1", "genre": "Music"},
-            {"date": "2022-01-02", "title": "Event 2", "genre": "Theater"},
-        ]
-        node_date = ".card-date"
-        node_title = ".card-title"
-        node_genre = ".card-genre"
-        card_data = fetch_card_data(cards, node_date, node_title, node_genre)
-        for card in card_data:
-            print(card)
-        ```
-    """
+def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list[dict]:
     base_url = "https://www.sydneyoperahouse.com"
     result = []
     for card in cards:
         try:
-            gig = Gig(
-                event_date=fetch_date(card, node_date),
-                title=fetch_title(card, node_title),
-                genre=fetch_genre(card, node_genre),
+            gig = SydneyOperaHouseGig(
+                date=fetch_date(card, date_tag),
+                title=fetch_title(card, title_tag),
+                genre=fetch_genre(card, genre_tag),
                 url=fetch_url(card, base_url),
                 image=fetch_image(card, base_url),
             )
@@ -201,23 +123,26 @@ def fetch_card_data(
 def sydney_opera_house():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    NODE_CARD = "div.soh-card.soh-card--whats-on.soh--card"
-    NODE_DATE = "time"
-    NODE_TITLE = "span.soh-card__title-text"
-    NODE_GENRE = "p.soh-card__category"
+    # CSS Selectors
+    CARD_TAG = "div.soh-card.soh-card--whats-on.soh--card"
+    DATE_TAG = "time"
+    TITLE_TAG = "span.soh-card__title-text"
+    GENRE_TAG = "p.soh-card__category"
 
     base_url = "https://www.sydneyoperahouse.com/whats-on?page="
     end_page = find_last_page(base_url)
     if end_page is None:
         sys.exit(1)
 
-    cards = get_event_cards(base_url, end_page, NODE_CARD)
+    cards = get_event_cards(base_url, end_page, CARD_TAG)
     if not len(cards):
         logging.error("No events found on page.")
         sys.exit(1)
+    print(cards)
 
-    data = fetch_card_data(cards, NODE_DATE, NODE_TITLE, NODE_GENRE)
+    data = get_data(cards, DATE_TAG, TITLE_TAG, GENRE_TAG)
     logging.warning(f"Found {len(data)} events.")
+
     export_json(data, filepath=save_path("data", "sydney_opera_house.json"))
 
 
