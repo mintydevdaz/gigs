@@ -11,11 +11,9 @@ from selectolax.parser import HTMLParser
 
 from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
 
-# ! Mon, 30-Oct-2023 ~ Times
-# * 1. 8s
-
 
 class PhoenixGig(Gig):
+    genre: str = "Contemporary"
     venue: str = "Phoenix Central Park"
     suburb: str = "Chippendale"
     state: str = "NSW"
@@ -167,12 +165,14 @@ def get_event_urls(url: str) -> list[str] | None:
     return extract_links(tree)
 
 
-def get_image(html: HTMLParser) -> str:
-    meta_tag = html.css_first("meta[property='og:image']")
+def get_image(html: HTMLParser, tag: str) -> str:
+    meta_tag = html.css_first(tag)
     return meta_tag.attrs.get("content", "-")
 
 
-def get_data(urls: list[str], title_tag: str, date_tag: str) -> list[dict]:
+def get_data(
+    urls: list[str], title_tag: str, date_tag: str, image_tag: str
+) -> list[dict]:
     result = []
     with httpx.Client(headers=headers) as client:
         for url in urls:
@@ -183,7 +183,7 @@ def get_data(urls: list[str], title_tag: str, date_tag: str) -> list[dict]:
                     date=tree.css_first(date_tag).text(),
                     title=tree.css_first(title_tag).text(),
                     url=url,
-                    image=get_image(tree),
+                    image=get_image(tree, image_tag),
                 )
                 result.append(gig.model_dump())
             except Exception as exc:
@@ -197,6 +197,7 @@ def phoenix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
     # CSS Selectors
+    IMAGE_TAG = "meta[property='og:image']"
     TITLE_TAG = "div.sqs-html-content > h3"
     DATE_TAG = "div.sqs-html-content > h4"
 
@@ -210,7 +211,7 @@ def phoenix():
         logging.error(f"No events found at {url}.")
         sys.exit(1)
 
-    data = get_data(urls, TITLE_TAG, DATE_TAG)
+    data = get_data(urls, TITLE_TAG, DATE_TAG, IMAGE_TAG)
     logging.warning(f"Found {len(data)} events.")
 
     export_json(data, filepath=save_path("data", "phoenix.json"))
