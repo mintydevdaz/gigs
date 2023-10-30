@@ -24,7 +24,7 @@ class CenturyGig(Gig):
 
     @field_validator("date")
     def clean_date(cls, dt_string):
-        fmt = "%A, %d %B %Y %I:%M %p"
+        fmt = "%A, %d %B %Y %I:%M %p"  # Tuesday, 09 January 2024 07:00 PM
         return datetime.strptime(dt_string, fmt).isoformat()
 
     @field_validator("title")
