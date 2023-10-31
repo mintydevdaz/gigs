@@ -8,7 +8,9 @@ from gigs.utils import export_json, logger, open_json, save_path, timer, headers
 
 
 def find_lowest_price(price_list: list[str]) -> float:
-    convert_to_floats = list(map(lambda i: float(i.replace("$", "").replace(",", "")), price_list))
+    convert_to_floats = list(
+        map(lambda i: float(i.replace("$", "").replace(",", "")), price_list)
+    )
     return min(convert_to_floats)
 
 
