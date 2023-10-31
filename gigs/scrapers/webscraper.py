@@ -8,6 +8,7 @@ from gigs.scrapers.moshtix_venue import moshtix_fetch_venue
 from gigs.scrapers.oztix import oztix
 from gigs.scrapers.phoenix import phoenix
 from gigs.scrapers.sydney_opera_house import sydney_opera_house
+from gigs.scrapers.sydney_opera_house_price import soh_fetch_price
 from gigs.scrapers.ticketek import ticketek
 from gigs.scrapers.ticketmaster import ticketmaster
 
@@ -19,6 +20,7 @@ def webscraper():
         oztix,
         phoenix,
         sydney_opera_house,
+        soh_fetch_price,
         ticketek,
         ticketmaster,
         moshtix,
