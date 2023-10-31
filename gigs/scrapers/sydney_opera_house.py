@@ -1,4 +1,3 @@
-from curses.ascii import isspace
 import logging
 import os
 import sys
@@ -6,7 +5,6 @@ import unicodedata
 from datetime import datetime
 
 import httpx
-import selectolax
 from pydantic import field_validator
 from selectolax.parser import HTMLParser, Node
 
