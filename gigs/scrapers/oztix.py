@@ -29,24 +29,6 @@ class OztixGig(Gig):
 
 
 def get_price(url: str) -> float:
-    """
-    Fetches the price from a given URL.
-
-    The function sends an HTTP GET request to the specified `url` with the provided
-    `headers`. If the response is None, an error message is logged and 0.0 is returned.
-    Otherwise, the HTML response is parsed using the `HTMLParser` class, and the
-    extracted ticket price is returned. If any exceptions occur during the process, an
-    error message is logged and 0.0 is returned.
-
-    Args:
-        url (str): The URL to fetch the price from.
-
-    Returns:
-        float: The fetched price, or 0.0 if an error occurs.
-
-    Raises:
-        Exception: If any error occurs during the fetching process.
-    """
     response = get_request(url, headers)
     if response is None:
         logging.error(f"Error fetching price for {url}.")
@@ -60,21 +42,6 @@ def get_price(url: str) -> float:
 
 
 def extract_ticket_price(tree: selectolax.parser.HTMLParser) -> float:
-    """
-    Extracts the ticket price from the given HTMLParser tree.
-
-    The function searches for nodes with the CSS selector "div.ticket-price.hide-mobile"
-    in the provided `tree`. It extracts the text from each node, removes the "$" and ","
-    characters, and converts the resulting strings to floats. The function returns the
-    minimum price among the extracted prices, or 0.0 if no prices are found.
-
-    Args:
-        tree (selectolax.parser.HTMLParser): The HTMLParser tree to extract the ticket
-        price from.
-
-    Returns:
-        float: The extracted ticket price, or 0.0 if no prices are found.
-    """
     nodes = tree.css("div.ticket-price.hide-mobile")
     prices = [
         float(
@@ -90,26 +57,6 @@ def extract_ticket_price(tree: selectolax.parser.HTMLParser) -> float:
 
 
 def fetch_data(event_data: list[dict]) -> list[dict]:
-    """
-    Fetches data from a list of event dictionaries and creates Gig instances.
-
-    The function iterates over each dictionary in the `event_data` list and attempts to
-    extract relevant data to create a Gig instance. The extracted data includes event
-    date, title, price (obtained using the `get_price` function), venue, suburb, state,
-    URL, and image. If any exceptions occur during the process, an error message is
-    logged. The function returns a list of dictionaries representing the dumped models
-    of the created Gig instances.
-
-    Args:
-        event_data (list[dict]): A list of dictionaries containing event data.
-
-    Returns:
-        list[dict]: A list of dictionaries representing the dumped models of the
-        created Gig instances.
-
-    Raises:
-        Exception: If any error occurs during the data extraction process.
-    """
     result = []
     for data in event_data:
         try:
