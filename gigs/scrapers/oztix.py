@@ -1,9 +1,11 @@
+from json import JSONDecodeError
 import logging
 import os
 import sys
 import unicodedata
 from datetime import datetime
 
+import httpx
 from pydantic import BaseModel, field_validator
 from selectolax.parser import HTMLParser
 
@@ -23,17 +25,17 @@ from gigs.utils import (
 class OztixGig(Gig):
     source: str = "Oztix"
 
-    @field_validator("date")
-    def convert_date(cls, v):
-        dt, time = v.split("T")
-        parse_dt = datetime.strptime(dt, "%Y-%m-%d")
-        return parse_dt.strftime("%d %b %Y")
-
     @field_validator("title")
     def remove_accents(cls, text):
         return (
             unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("utf-8")
         )
+
+
+def create_data_cache(response: httpx.Response, json_key: str) -> list[dict] | None:
+    if "application/json" in response.headers.get("content-type", ""):
+        return response.json().get(json_key)
+    return None
 
 
 def get_price(url: str) -> float:
@@ -68,15 +70,14 @@ def fetch_data(event_data: list[dict]) -> list[dict]:
     result = []
     for data in event_data:
         try:
-            url = data["eventUrl"]
             gig = OztixGig(
-                date=data["dateStart"],
+                date=data["dateStart"],  # ISO8601
                 title=data["eventName"],
                 price=get_price(url),
                 venue=data["venue"]["name"],
                 suburb=data["venue"]["locality"],
                 state=data["venue"]["state"],
-                url=url,
+                url=data["eventUrl"],
                 image=data["eventImage1"],
             )
             result.append(gig.model_dump())
@@ -90,17 +91,16 @@ def fetch_data(event_data: list[dict]) -> list[dict]:
 def oztix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    # Fetch data
-    url = "https://personalisationapi.oztix.com.au/api/recommendations"
-    response = get_post_response(url, payload)
+    response = get_post_response(
+        url="https://personalisationapi.oztix.com.au/api/recommendations",
+        payload=payload,
+    )
     if response is None:
         sys.exit(1)
 
-    cache_data = response.json()
-    event_data = cache_data.get("catalog")
-
+    event_data = create_data_cache(response, json_key="catalog")
     if event_data is None:
-        logging.error("No event data found! Possible error fetching JSON data.")
+        logging.error("No JSON data found.")
         sys.exit(1)
 
     result = fetch_data(event_data)
