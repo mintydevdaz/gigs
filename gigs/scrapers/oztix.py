@@ -8,23 +8,14 @@ import selectolax
 from pydantic import BaseModel, field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import (export_json, get_post_response, get_request, headers,
+from gigs.utils import (export_json, Gig, get_post_response, get_request, headers,
                         logger, payload, save_path, timer)
 
 
-class Gig(BaseModel):
-    event_date: str = "-"
-    title: str = "-"
-    price: float = 0.0
-    genre: str = "-"
-    venue: str = "-"
-    suburb: str = "-"
-    state: str = "-"
-    url: str = "-"
-    image: str = "-"
+class OztixGig(Gig):
     source: str = "Oztix"
 
-    @field_validator("event_date")
+    @field_validator("date")
     def convert_date(cls, v):
         dt, time = v.split("T")
         parse_dt = datetime.strptime(dt, "%Y-%m-%d")
@@ -123,8 +114,8 @@ def fetch_data(event_data: list[dict]) -> list[dict]:
     for data in event_data:
         try:
             url = data["eventUrl"]
-            gig = Gig(
-                event_date=data["dateStart"],
+            gig = OztixGig(
+                date=data["dateStart"],
                 title=data["eventName"],
                 price=get_price(url),
                 venue=data["venue"]["name"],
