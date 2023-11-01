@@ -4,12 +4,20 @@ import sys
 import unicodedata
 from datetime import datetime
 
-import selectolax
 from pydantic import BaseModel, field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import (export_json, Gig, get_post_response, get_request, headers,
-                        logger, payload, save_path, timer)
+from gigs.utils import (
+    Gig,
+    export_json,
+    get_post_response,
+    get_request,
+    headers,
+    logger,
+    payload,
+    save_path,
+    timer,
+)
 
 
 class OztixGig(Gig):
@@ -41,7 +49,7 @@ def get_price(url: str) -> float:
         return 0.0
 
 
-def extract_ticket_price(tree: selectolax.parser.HTMLParser) -> float:
+def extract_ticket_price(tree: HTMLParser) -> float:
     nodes = tree.css("div.ticket-price.hide-mobile")
     prices = [
         float(
