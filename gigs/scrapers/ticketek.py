@@ -3,7 +3,8 @@ import os
 import unicodedata
 
 import httpx
-from pydantic import BaseModel, field_validator
+from dateutil import parser
+from pydantic import field_validator
 from selectolax.parser import HTMLParser, Node
 
 from gigs.utils import Gig, export_json, logger, save_path, timer
@@ -11,10 +12,6 @@ from gigs.utils import Gig, export_json, logger, save_path, timer
 
 class TicketekGig(Gig):
     source: str = "Ticketek"
-
-    @field_validator("date")
-    def clean_date(cls, v):
-        return f"0{v.title().strip()}" if v[1].isspace() else v.title().strip()
 
     @field_validator("title")
     def remove_accents(cls, text):
@@ -29,12 +26,28 @@ def get_events(base_url: str, event_tag: str, end_page: int) -> list[Node]:
         for page in range(1, end_page):
             url = f"{base_url}{page}"
             try:
-                response = client.get(url)
+                response = client.get(url, follow_redirects=True)
                 tree = HTMLParser(response.text)
                 events.extend(tree.css(event_tag))
             except Exception as exc:
                 logging.error(f"Error fetching data from URL '{url}': {exc}.")
     return events
+
+
+def date_to_iso8601(date_object: Node) -> str:
+    date_str = date_object.text().strip()  # Sat 02 Nov 2024
+    try:
+        parsed_date = parser.parse(date_str[:15])
+        return parsed_date.isoformat()
+    except ValueError:
+        return "2099-01-01T00:00:00"
+
+
+def get_date(event: Node, tag: str) -> str:
+    date_object = event.css_first(tag)
+    if date_object is None:
+        return "2099-01-01T00:00:00"
+    return date_to_iso8601(date_object)
 
 
 def get_url(node: Node) -> str:
@@ -83,30 +96,6 @@ def get_location(event: Node, node_location: str) -> list[str]:
         return [f"{loc[0]}, {loc[1]}", loc[2], loc[3]]
     else:
         return [f"{loc[0]}", "-", f"{loc[-1]}"]
-
-
-def get_date(event: Node, node_date: str) -> str:
-    """
-    Retrieves the date from the specified event node.
-
-    Args:
-        event (selectolax.parser.Node): The event node.
-        node_date (str): The CSS selector for the date element.
-
-    Returns:
-        str: The formatted date string. Returns "01 Jan 2099" if "TBC" is found in the
-        date string, otherwise returns a substring of the date.
-
-    Example:
-        ```python
-        event_node = selectolax.parser.Node()
-        node_date = ".date"
-        date = get_date(event_node, node_date)
-        print(date)
-        ```
-    """
-    dt_object = event.css_first(node_date).text().strip()
-    return "01 Jan 2099" if "TBC" in dt_object.upper() else dt_object[4:15]
 
 
 def build_gig(
@@ -188,12 +177,12 @@ def ticketek():
     BASE_URL = "https://premier.ticketek.com.au/shows/genre.aspx?c=2048&page="
     END_PAGE = 24
     EVENT_TAG = "div.resultModule"
-    NODE_VENUE = "div.contentEventAndDate.clearfix"
-    NODE_LOCATION = "div.contentLocation"
-    NODE_DATE = "div.contentDate"
+    DATE_TAG = "div.contentDate"
+    VENUE_TAG = "div.contentEventAndDate.clearfix"
+    LOC_TAG = "div.contentLocation"
 
     events = get_events(BASE_URL, EVENT_TAG, END_PAGE)
-    data = extract_event_data(events, NODE_VENUE, NODE_LOCATION, NODE_DATE)
+    data = extract_event_data(events, VENUE_TAG, LOC_TAG, DATE_TAG)
     logging.warning(f"Found {len(data)} events.")
     export_json(data, filepath=save_path("data", "ticketek.json"))
 
