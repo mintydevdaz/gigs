@@ -6,22 +6,13 @@ import httpx
 from pydantic import BaseModel, field_validator
 from selectolax.parser import HTMLParser, Node
 
-from gigs.utils import export_json, logger, save_path, timer
+from gigs.utils import Gig, export_json, logger, save_path, timer
 
 
-class Gig(BaseModel):
-    event_date: str = "-"
-    title: str = "-"
-    price: float = 0.0
-    genre: str = "-"
-    venue: str = "-"
-    suburb: str = "-"
-    state: str = "-"
-    url: str = "-"
-    image: str = "-"
+class TicketekGig(Gig):
     source: str = "Ticketek"
 
-    @field_validator("event_date")
+    @field_validator("date")
     def clean_date(cls, v):
         return f"0{v.title().strip()}" if v[1].isspace() else v.title().strip()
 
@@ -32,54 +23,18 @@ class Gig(BaseModel):
         )
 
 
-def get_request(url: str) -> httpx.Response | None:
-    try:
-        response = httpx.get(url, follow_redirects=True)
-        response.raise_for_status()
-        return response
-    except httpx.HTTPError as exc:
-        logging.error(f"Request error occurred: {exc}.")
-        return None
-
-
-def get_events(base_url: str, node: str, end_page: int) -> list[Node]:
-    """
-    Fetches events from a given base URL by making HTTP requests to multiple pages.
-
-    Args:
-        base_url (str): The base URL to fetch events from.
-        node (str): The CSS selector for the desired HTML node containing the events.
-        end_page (int): The number of pages to fetch events from.
-
-    Returns:
-        list[Node]: A list of nodes containing the fetched events.
-
-    Raises:
-        Exception: If there is an error parsing the HTML text.
-
-    Example:
-        ```python
-        base_url = "https://example.com/events?page="
-        node = ".event"
-        end_page = 5
-
-        events = get_events(base_url, node, end_page)
-        for event in events:
-            print(event)
-        ```
-    """
-    result = []
-    for page_num in range(1, end_page):
-        url = f"{base_url}{page_num}"
-        if response := get_request(url):
+def get_events(base_url: str, event_tag: str, end_page: int) -> list[Node]:
+    events = []
+    with httpx.Client() as client:
+        for page in range(1, end_page):
+            url = f"{base_url}{page}"
             try:
+                response = client.get(url)
                 tree = HTMLParser(response.text)
-                result.extend(tree.css(node))
+                events.extend(tree.css(event_tag))
             except Exception as exc:
-                logging.error(f"Error parsing text for page {page_num} -> {exc}.")
-        else:
-            logging.error(f"Error fetching response for {url}.")
-    return result
+                logging.error(f"Error fetching data from URL '{url}': {exc}.")
+    return events
 
 
 def get_url(node: Node) -> str:
@@ -163,8 +118,8 @@ def build_gig(
     node_date: str,
 ):
     loc = get_location(event, node_location)
-    gig = Gig(
-        event_date=get_date(event, node_date),
+    gig = TicketekGig(
+        date=get_date(event, node_date),
         title=title,
         venue=loc[0],
         suburb=loc[1],
@@ -231,12 +186,13 @@ def ticketek():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
     BASE_URL = "https://premier.ticketek.com.au/shows/genre.aspx?c=2048&page="
-    NODE_EVENT = "div.resultModule"
+    END_PAGE = 24
+    EVENT_TAG = "div.resultModule"
     NODE_VENUE = "div.contentEventAndDate.clearfix"
     NODE_LOCATION = "div.contentLocation"
     NODE_DATE = "div.contentDate"
 
-    events = get_events(BASE_URL, NODE_EVENT, end_page=24)
+    events = get_events(BASE_URL, EVENT_TAG, END_PAGE)
     data = extract_event_data(events, NODE_VENUE, NODE_LOCATION, NODE_DATE)
     logging.warning(f"Found {len(data)} events.")
     export_json(data, filepath=save_path("data", "ticketek.json"))
