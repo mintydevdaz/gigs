@@ -11,7 +11,6 @@ from gigs.utils import (
     Gig,
     export_json,
     get_post_response,
-    get_request,
     headers,
     logger,
     payload,
@@ -36,38 +35,6 @@ def create_data_cache(response: httpx.Response, json_key: str) -> list[dict] | N
     return None
 
 
-def get_prices(data: list[dict], price_tag: str):
-    result = []
-    with httpx.Client(headers=headers) as client:
-        for event in data:
-            url = event["url"]
-            try:
-                response = client.get(url)
-                tree = HTMLParser(response.text)
-                price = extract_ticket_price(tree, price_tag)
-                event["price"] = "price"
-                result.append(event)
-            except Exception as exc:
-                logging.error(f"Unable to extract price at URL '{url}': {exc}.")
-                result.append(event)
-    return result
-
-
-def extract_ticket_price(html: HTMLParser, tag: str) -> float:
-    nodes = html.css(tag)
-    prices = [
-        float(
-            node.css_first(tag)
-            .text()
-            .strip()
-            .replace("$", "")
-            .replace(",", "")
-        )
-        for node in nodes
-    ]
-    return float(min(prices)) if prices else 0.0
-
-
 def get_data(event_data: list[dict]) -> list[dict]:
     result = []
     for data in event_data:
@@ -87,22 +54,55 @@ def get_data(event_data: list[dict]) -> list[dict]:
     return result
 
 
+def get_html(client: httpx.Client, url: str) -> HTMLParser | None:
+    try:
+        response = client.get(url)
+        return HTMLParser(response.text)
+    except httpx.HTTPError as exc:
+        logging.error(f"Unable to get HTML at URL '{url}': {exc}.")
+        return None
+
+
+def extract_ticket_price(html: HTMLParser, tag: str) -> float:
+    nodes = html.css(tag)
+    prices = [
+        float(node.css_first(tag).text().strip().replace("$", "").replace(",", ""))
+        for node in nodes
+    ]
+    return float(min(prices)) if prices else 0.0
+
+
+def extract_price_from_event(client: httpx.Client, event: dict, price_tag: str):
+    tree = get_html(client, event["url"])
+    if tree is not None:
+        price = extract_ticket_price(tree, price_tag)
+        event["price"] = price
+    return event
+
+
+def get_prices(data: list[dict], price_tag: str) -> list[dict]:
+    result = []
+    with httpx.Client(headers=headers) as client:
+        result.extend(
+            extract_price_from_event(client, event, price_tag) for event in data
+        )
+    return result
+
+
 @timer
 @logger(filepath=save_path("data", "app.log"))
 def oztix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    # CSS Selector
     PRICE_TAG = "div.ticket-price.hide-mobile"
+    url = "https://personalisationapi.oztix.com.au/api/recommendations"
+    json_key = "catalog"
 
-    response = get_post_response(
-        url="https://personalisationapi.oztix.com.au/api/recommendations",
-        payload=payload,
-    )
+    response = get_post_response(url, payload)
     if response is None:
         sys.exit(1)
 
-    cache = create_data_cache(response, json_key="catalog")
+    cache = create_data_cache(response, json_key)
     if cache is None:
         logging.error("No JSON data found.")
         sys.exit(1)
