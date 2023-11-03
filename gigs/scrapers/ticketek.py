@@ -72,15 +72,22 @@ def get_image(event: Node) -> str:
         return "-"
 
 
-def get_location(event: Node, node_location: str) -> list[str]:
-    data = event.css_first(node_location).text().strip()
-    loc = [i.strip() for i in data.split(",")]
-    if len(loc) == 3:
-        return loc
-    elif len(loc) == 4:
-        return [f"{loc[0]}, {loc[1]}", loc[2], loc[3]]
-    else:
-        return [f"{loc[0]}", "-", f"{loc[-1]}"]
+def extract_venue_suburb_and_state(loc: list[str]) -> tuple[str, str, str]:
+    if len(loc) != 4:
+        return (loc[0], "-", loc[-1])
+    venue = f"{loc[0]}, {loc[1]}"
+    return venue, loc[2], loc[3]
+
+
+def get_location(event: Node, location_tag: str) -> tuple[str, ...]:
+    try:
+        text = event.css_first(location_tag).text().strip()
+        address = [i.strip() for i in text.split(",")]
+        if len(address) == 3:
+            return tuple(address)
+        return extract_venue_suburb_and_state(address)
+    except Exception as exc:
+        return ("-", "-", "-")
 
 
 def build_gig(
@@ -88,16 +95,16 @@ def build_gig(
     title: str,
     url: str,
     image: str,
-    node_location: str,
-    node_date: str,
+    loc_tag: str,
+    date_tag: str,
 ):
-    loc = get_location(event, node_location)
+    venue, suburb, state = get_location(event, loc_tag)
     gig = TicketekGig(
-        date=get_date(event, node_date),
+        date=get_date(event, date_tag),
         title=title,
-        venue=loc[0],
-        suburb=loc[1],
-        state=loc[2],
+        venue=venue,
+        suburb=suburb,
+        state=state,
         url=url,
         image=image,
     )
