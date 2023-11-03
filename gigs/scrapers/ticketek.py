@@ -34,6 +34,11 @@ def get_events(base_url: str, event_tag: str, end_page: int) -> list[Node]:
     return events
 
 
+def get_title(event: Node) -> str:
+    title = event.css_first("h6")
+    return "-" if title is None else title.text().strip()
+
+
 def date_to_iso8601(date_object: Node) -> str:
     date_str = date_object.text().strip()  # Sat 02 Nov 2024
     try:
@@ -50,44 +55,24 @@ def get_date(event: Node, tag: str) -> str:
     return date_to_iso8601(date_object)
 
 
-def get_url(node: Node) -> str:
+def get_url(event: Node) -> str:
     base_url = "https://premier.ticketek.com.au"
     try:
-        href = node.css_first("a").attributes["href"]
+        href = event.css_first("a").attributes["href"]
         return f"{base_url}{href}"
     except Exception:
         return "-"
 
 
-def get_image(node: Node) -> str:
+def get_image(event: Node) -> str:
     try:
-        image = node.css_first("img").attributes["src"]
+        image = event.css_first("img").attributes["src"]
         return f"https:{image}"
     except Exception:
         return "-"
 
 
 def get_location(event: Node, node_location: str) -> list[str]:
-    """
-    Extracts location information from an event using a CSS selector. Indices represent
-    (0) Venue, (1) City, (2) State.
-
-    Args:
-        event (selectolax.parser.Node): The event node to extract location from.
-        node_location (str): The CSS selector for the location node.
-
-    Returns:
-        list[str]: A list containing the extracted location information.
-
-    Examples:
-        ```python
-        event = selectolax.parser.Node()
-        node_location = ".location"
-
-        location = get_location(event, node_location)
-        print(location)  # ['Venue', '-', 'Country']
-        ```
-    """
     data = event.css_first(node_location).text().strip()
     loc = [i.strip() for i in data.split(",")]
     if len(loc) == 3:
@@ -119,50 +104,21 @@ def build_gig(
     return gig.model_dump()
 
 
-def extract_event_data(
+def get_data(
     events: list[Node],
-    node_venue: str,
-    node_location: str,
-    node_date: str,
+    venue_tag: str,
+    loc_tag: str,
+    date_tag: str,
 ) -> list[dict]:
-    """
-    Extracts event data from a list of Node objects based on the specified criteria.
-
-    The function iterates over the events and retrieves the title, URL, and image for
-    each event. It then builds a list of gigs by calling the 'build_gig' function for
-    each show that matches the 'node_venue' criteria. The resulting list of gigs is
-    returned.
-
-    Args:
-        events (list[Node]): A list of Node objects representing events.
-        node_venue (str): The CSS selector for the venue element.
-        node_location (str): The CSS selector for the location element.
-        node_date (str): The CSS selector for the date element.
-
-    Returns:
-        list[dict]: A list of dictionaries representing the extracted event data.
-
-    Example:
-        ```python
-        events = get_events()
-        node_venue = ".venue"
-        node_location = ".location"
-        node_date = ".date"
-
-        extracted_data = extract_event_data(events, node_venue, node_location,
-        node_date)
-        print(extracted_data)
-        ```
-    """
     result = []
     for event in events:
-        title = event.css_first("h6").text().strip()
-        url = get_url(node=event)
-        image = get_image(node=event)
+        title = get_title(event)
+        url = get_url(event)
+        image = get_image(event)
 
         gigs = [
-            build_gig(show, title, url, image, node_location, node_date)
-            for show in event.css(node_venue)
+            build_gig(show, title, url, image, loc_tag, date_tag)
+            for show in event.css(venue_tag)
         ]
         result.extend(gigs)
 
@@ -182,7 +138,7 @@ def ticketek():
     LOC_TAG = "div.contentLocation"
 
     events = get_events(BASE_URL, EVENT_TAG, END_PAGE)
-    data = extract_event_data(events, VENUE_TAG, LOC_TAG, DATE_TAG)
+    data = get_data(events, VENUE_TAG, LOC_TAG, DATE_TAG)
     logging.warning(f"Found {len(data)} events.")
     export_json(data, filepath=save_path("data", "ticketek.json"))
 
