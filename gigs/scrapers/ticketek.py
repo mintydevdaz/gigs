@@ -55,23 +55,6 @@ def get_date(event: Node, tag: str) -> str:
     return date_to_iso8601(date_object)
 
 
-def get_url(event: Node) -> str:
-    base_url = "https://premier.ticketek.com.au"
-    try:
-        href = event.css_first("a").attributes["href"]
-        return f"{base_url}{href}"
-    except Exception:
-        return "-"
-
-
-def get_image(event: Node) -> str:
-    try:
-        image = event.css_first("img").attributes["src"]
-        return f"https:{image}"
-    except Exception:
-        return "-"
-
-
 def extract_venue_suburb_and_state(loc: list[str]) -> tuple[str, str, str]:
     if len(loc) != 4:
         return (loc[0], "-", loc[-1])
@@ -88,6 +71,23 @@ def get_location(event: Node, location_tag: str) -> tuple[str, ...]:
         return extract_venue_suburb_and_state(address)
     except Exception as exc:
         return ("-", "-", "-")
+
+
+def get_url(event: Node) -> str:
+    base_url = "https://premier.ticketek.com.au"
+    try:
+        href = event.css_first("a").attributes["href"]
+        return f"{base_url}{href}"
+    except Exception:
+        return "-"
+
+
+def get_image(event: Node) -> str:
+    try:
+        image = event.css_first("img").attributes["src"]
+        return f"https:{image}"
+    except Exception:
+        return "-"
 
 
 def build_gig(
@@ -128,7 +128,6 @@ def get_data(
             for show in event.css(venue_tag)
         ]
         result.extend(gigs)
-
     return result
 
 
