@@ -162,6 +162,7 @@ cython_debug/
 # Local Files
 .DS_Store
 .vscode
+gigs/cache
 gigs/data
 gigs/data_files
 gigs/CONTACTS.py
