@@ -6,35 +6,17 @@ import unicodedata
 from datetime import datetime
 
 import chompjs
-from pydantic import BaseModel, Field, field_validator
+import httpx
+from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import (export_json, get_request, headers, logger, save_path,
-                        timer)
+from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
 
 
-class Gig(BaseModel):
-    event_date: str = Field(default="01 Jan 2099")
-    title: str = "-"
-    price: float = 0.0
-    genre: str = "-"
-    venue: str = "-"
-    suburb: str = "-"
-    state: str = "-"
-    url: str = "-"
-    image: str = Field(default="-")
+class EventbriteGig(Gig):
     source: str = "Eventbrite"
 
-    @field_validator("event_date")
-    def parse_date(cls, v):
-        dt_object = datetime.strptime(v, "%Y-%m-%d")
-        return dt_object.strftime("%d %b %Y")
-
-    @field_validator("price")
-    def convert_price(cls, v):
-        return float(v) if isinstance(v, str) else 0.0
-
-    @field_validator("title", "venue")
+    @field_validator("title")
     def remove_accents(cls, text):
         text = (
             unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("utf-8")
@@ -42,115 +24,78 @@ class Gig(BaseModel):
         return text.strip()
 
 
-def pagination(base_url: str, page_num: int, tag: str) -> int | None:
-    """
-    Fetches the pagination count for a given base URL, page number, and tag.
-
-    Args:
-        base_url (str): The base URL.
-        page_num (int): The page number.
-        tag (str): The CSS selector for the tag.
-
-    Returns:
-        int | None: The pagination count if found, None otherwise.
-    """
-    url = f"{base_url}{page_num}"
+def get_response_and_parse_html(url: str) -> HTMLParser | None:
     response = get_request(url, headers)
-    if response is None:
-        logging.error(f"Error fetching response for {url}.")
+    return None if response is None else HTMLParser(response.text)
+
+
+def parse_javascript_text(html: HTMLParser, tag: str):
+    script_tags = html.css(tag)
+    text = "".join(script.text().strip() for script in script_tags).replace(" ", "")
+    if match := re.search(pattern=r'"page_count":(\d{1,3})', string=text):
+        return int(match[1]) + 1
+    else:
         return None
 
+
+def end_page(base_url: str, tag: str, page: int = 1) -> int | None:
+    html = get_response_and_parse_html(url=f"{base_url}{page}")
+    if html is None:
+        return None
+    page_num = parse_javascript_text(html, tag)
+    return None if page_num is None else page_num
+
+
+def get_events(base_url: str, start_page: int, end_page: int, tag: str):
+    events = []
+    with httpx.Client(headers=headers) as client:
+        for page in range(start_page, end_page):
+            url = f"{base_url}{page}"
+            try:
+                response = client.get(url)
+                tree = HTMLParser(response.text)
+                if json_tags := tree.css(tag):
+                    for json in json_tags:
+                        data = chompjs.parse_js_object(json.text())
+                        events.append(data)
+            except Exception as exc:
+                logging.error(f"Unable to parse JSON tag at URL '{url}': {exc}.")
+    return events
+
+
+def get_date(event: dict) -> str:
     try:
-        tree = HTMLParser(response.text)
-        script_tags = tree.css(tag)
-        text = "".join(script.text().strip() for script in script_tags).replace(" ", "")
-        if match := re.search(pattern=r'"page_count":(\d{1,3})', string=text):
-            return int(match[1]) + 1
-    except Exception as exc:
-        logging.error(f"Unable to find last Eventbrite page: {exc}")
-        return None
+        date_str = event["startDate"]
+        return datetime.strptime(date_str, "%Y-%m-%d").isoformat()
+    except Exception:
+        return "2099-01-01T00:00:00"
 
 
-def fetch_events(base_url: str, start_page: int, end_page: int, tag: str):
-    """
-    Fetches events from a given base URL within a specified range of pages, using a
-    specified tag.
-
-    The function sends HTTP GET requests to each page within the range of `start_page`
-    and `end_page` (exclusive). It parses the HTML response using the `HTMLParser`
-    class and extracts script tags that match the specified `tag`. Each script tag is
-    then parsed using `chompjs.parse_js_object()` to obtain a JSON object, which is
-    appended to the `result` list. If any exceptions occur during the process, an error
-    message is logged. The function returns the `result` list.
-
-    Args:
-        base_url (str): The base URL to fetch events from.
-        start_page (int): The starting page number (inclusive).
-        end_page (int): The ending page number (exclusive).
-        tag (str): The CSS selector tag to match script tags.
-
-    Returns:
-        list: A list of JSON objects representing the fetched events.
-
-    Raises:
-        Exception: If any error occurs during the fetching process.
-    """
-    result = []
-    for page_num in range(start_page, end_page):
-        url = f"{base_url}{page_num}"
-        response = get_request(url, headers)
-        if response is None:
-            logging.error(f"Error fetching response for {url}.")
-            continue
-
-        try:
-            tree = HTMLParser(response.text)
-            if script_tags := tree.css(tag):
-                for script_tag in script_tags:
-                    json_object = chompjs.parse_js_object(script_tag.text())
-                    result.append(json_object)
-        except Exception as exc:
-            logging.error(f"Unable to extract data from url: {exc} ({url}).")
-    return result
+def get_location_info(event: dict) -> tuple[str, ...]:
+    try:
+        venue = event["location"]["name"]
+        suburb = event["location"]["address"]["addressLocality"]
+        state = event["location"]["address"]["addressRegion"]
+        return venue, suburb, state
+    except Exception:
+        return "-", "-", "-"
 
 
-def fetch_data(json_data: list[dict]) -> list[dict]:
-    """
-    Fetches data from a list of JSON objects and creates Gig instances.
-
-    The function iterates over each JSON object in the `json_data` list and attempts to
-    extract relevant data to create a Gig instance. The extracted data includes event
-    date, title, price, venue, suburb, state, URL, and image. If any exceptions occur
-    during the process, an error message is logged. The function returns a list of
-    dictionaries representing the dumped models of the created Gig instances.
-
-    Args:
-        json_data (list[dict]): A list of JSON objects containing event data.
-
-    Returns:
-        list[dict]: A list of dictionaries representing the dumped models of the
-        created Gig instances.
-
-    Raises:
-        Exception: If any error occurs during the data extraction process.
-    """
-    result = []
-    for data in json_data:
-        try:
-            gig = Gig(
-                event_date=data["startDate"],
-                title=data["name"],
-                price=data["offers"].get("lowPrice"),
-                venue=data["location"].get("name"),
-                suburb=data["location"]["address"].get("addressLocality"),
-                state=data["location"]["address"].get("addressRegion"),
-                url=data["url"],
-                image=data.get("image", "-"),
-            )
-            result.append(gig.model_dump())
-        except Exception as exc:
-            logging.error(f"Unable to extract data: {exc}")
-    return result
+def get_data(events: list[dict]) -> list[dict]:
+    data = []
+    for event in events:
+        venue, suburb, state = get_location_info(event)
+        gig = EventbriteGig(
+            date=get_date(event),
+            title=event.get("name", "-"),
+            venue=venue,
+            suburb=suburb,
+            state=state,
+            url=event.get("url", "-"),
+            image=event.get("image", "-"),
+        )
+        data.append(gig.model_dump())
+    return data
 
 
 @timer
@@ -161,15 +106,18 @@ def eventbrite():
     JS_TAG = 'script[type="text/javascript"]'
     JSON_TAG = "script[type='application/ld+json']"
 
-    base_url = "https://www.eventbrite.com.au/d/australia/music--events/%23music/?page="
-    end_page = pagination(base_url, page_num=1, tag=JS_TAG)
-    if end_page is None:
-        sys.exit()
+    base_url = "https://www.eventbrite.com.au/d/australia/music--performances/?page=z"
+    last_page = end_page(base_url, JS_TAG)
+    if last_page is None:
+        logging.error("Unable to get last Eventbrite page.")
+        sys.exit(1)
 
-    cached_data = fetch_events(base_url, start_page=1, end_page=end_page, tag=JSON_TAG)
-    result = fetch_data(cached_data)
-    logging.warning(f"Found {len(result)} events.")
-    export_json(result, filepath=save_path("data", "eventbrite.json"))
+    cache_events = get_events(base_url, 1, last_page, JSON_TAG)
+    export_json(cache_events, filepath=save_path("data", "eventbrite_cache.json"))
+
+    data = get_data(cache_events)
+    logging.warning(f"Found {len(data)} events.")
+    export_json(data, filepath=save_path("data", "eventbrite.json"))
 
 
 if __name__ == "__main__":
