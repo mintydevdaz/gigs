@@ -27,7 +27,7 @@ def get_events(api_key: str, last_page: int) -> list[dict]:
     events = []
     with httpx.Client() as client:
         for page in range(last_page):
-            url = f"https://app.ticketmaster.com/discovery/v2/events.json?classificationName=music&countryCode=AU&page={page}&apikey={api_key}"
+            url = f"https://app.ticketmaster.com/discovery/v2/events.json?classificationName=music&countryCode=AU&page={page}&apikey={api_key}"  # noqa
             try:
                 json = client.get(url).json()["_embedded"]["events"]
                 events.extend(json)
@@ -51,7 +51,7 @@ def get_lowest_price(event: dict) -> float:
         price = min(num.get("min") for num in prices if num.get("min") != 0)
         return float(price) if isinstance(price, (float, str)) else 0.0
     except Exception as exc:
-        logging.error(f"Possibly no price for '{event.get('url')}'.")
+        logging.error(f"Possibly no price for '{event.get('url')}': {exc}.")
         return 0.0
 
 
