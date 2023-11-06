@@ -10,7 +10,7 @@ import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import Gig, export_json, get_request, custom_headers, logger, save_path, timer
 
 
 class EventbriteGig(Gig):
@@ -24,7 +24,7 @@ class EventbriteGig(Gig):
         return text.strip()
 
 
-def get_response_and_parse_html(url: str) -> HTMLParser | None:
+def get_response_and_parse_html(url: str, headers: dict[str, str]) -> HTMLParser | None:
     response = get_request(url, headers)
     return None if response is None else HTMLParser(response.text)
 
@@ -38,15 +38,17 @@ def parse_javascript_text(html: HTMLParser, tag: str):
         return None
 
 
-def end_page(base_url: str, tag: str, page: int = 1) -> int | None:
-    html = get_response_and_parse_html(url=f"{base_url}{page}")
+def end_page(base_url: str, headers: dict[str, str], tag: str, page: int = 1) -> int | None:
+    url = f"{base_url}{page}"
+    html = get_response_and_parse_html(url, headers)
     if html is None:
         return None
     page_num = parse_javascript_text(html, tag)
+    logging.warning(f"Last page number is {page_num}.")
     return None if page_num is None else page_num
 
 
-def get_events(base_url: str, start_page: int, end_page: int, tag: str):
+def get_events(base_url: str, headers: dict[str, str], start_page: int, end_page: int, tag: str):
     events = []
     with httpx.Client(headers=headers) as client:
         for page in range(start_page, end_page):
@@ -105,16 +107,17 @@ def eventbrite():
 
     JS_TAG = 'script[type="text/javascript"]'
     JSON_TAG = "script[type='application/ld+json']"
+    headers = custom_headers
     destination_cache_file = "eventbrite_cache.json"
     destination_data_file = "eventbrite.json"
 
-    base_url = "https://www.eventbrite.com.au/d/australia/music--performances/?page=z"
-    last_page = end_page(base_url, JS_TAG)
+    base_url = "https://www.eventbrite.com.au/d/australia/music--performances/?page="
+    last_page = end_page(base_url, headers, JS_TAG)
     if last_page is None:
         logging.error("Unable to get last Eventbrite page.")
         sys.exit(1)
 
-    cache_events = get_events(base_url, 1, last_page, JSON_TAG)
+    cache_events = get_events(base_url, headers, 1, last_page, JSON_TAG)
     export_json(cache_events, filepath=save_path("cache", destination_cache_file))
 
     data = get_data(cache_events)
