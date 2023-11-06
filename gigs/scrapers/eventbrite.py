@@ -105,6 +105,8 @@ def eventbrite():
 
     JS_TAG = 'script[type="text/javascript"]'
     JSON_TAG = "script[type='application/ld+json']"
+    destination_cache_file = "eventbrite_cache.json"
+    destination_data_file = "eventbrite.json"
 
     base_url = "https://www.eventbrite.com.au/d/australia/music--performances/?page=z"
     last_page = end_page(base_url, JS_TAG)
@@ -113,11 +115,11 @@ def eventbrite():
         sys.exit(1)
 
     cache_events = get_events(base_url, 1, last_page, JSON_TAG)
-    export_json(cache_events, filepath=save_path("data", "eventbrite_cache.json"))
+    export_json(cache_events, filepath=save_path("cache", destination_cache_file))
 
     data = get_data(cache_events)
     logging.warning(f"Found {len(data)} events.")
-    export_json(data, filepath=save_path("data", "eventbrite.json"))
+    export_json(data, filepath=save_path("data", destination_data_file))
 
 
 if __name__ == "__main__":
