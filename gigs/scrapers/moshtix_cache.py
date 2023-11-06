@@ -17,7 +17,9 @@ def get_response_and_parse_html(url: str) -> HTMLParser | None:
 def get_page_number(html: HTMLParser, tag: str) -> int | None:
     try:
         pagination_text = html.css_first(tag).text(strip=True).split(" ")
-        return int(pagination_text[-1]) + 1
+        page_num = int(pagination_text[-1]) + 1
+        logging.warning(f"End page is {page_num}.")
+        return page_num
     except Exception as exc:
         logging.error(f"Unable to extract last page: {exc}.")
         return None
