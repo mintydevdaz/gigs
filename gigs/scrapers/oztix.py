@@ -94,10 +94,11 @@ def get_prices(data: list[dict], price_tag: str, headers: dict[str, str]) -> lis
 def oztix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    PRICE_TAG = "div.ticket-price.hide-mobile"
-    url = "https://personalisationapi.oztix.com.au/api/recommendations"
     json_key = "catalog"
     headers = custom_headers
+    destination_file = "oztix.json"
+    PRICE_TAG = "div.ticket-price.hide-mobile"
+    url = "https://personalisationapi.oztix.com.au/api/recommendations"
 
     response = get_post_response(url, payload)
     if response is None:
@@ -112,7 +113,7 @@ def oztix():
     final_data = get_prices(initial_data, PRICE_TAG, headers)
     logging.warning(f"Found {len(final_data)} events.")
 
-    export_json(final_data, filepath=save_path("data", "oztix.json"))
+    export_json(final_data, filepath=save_path("data", destination_file))
 
 
 if __name__ == "__main__":
