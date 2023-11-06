@@ -9,7 +9,15 @@ from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
 from gigs.CONSTANTS import CENTURY_VENUES
-from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import (
+    Gig,
+    custom_headers,
+    export_json,
+    get_request,
+    logger,
+    save_path,
+    timer,
+)
 
 
 class CenturyGig(Gig):
@@ -40,7 +48,7 @@ class CenturyGig(Gig):
             return "-"
 
 
-def get_event_cards(venues: list[dict], tag: str) -> list[dict]:
+def get_event_cards(venues: list[dict], tag: str, headers: dict[str, str]) -> list[dict]:
     """
     Fetches event URLs from a list of venues based on specified tags.
 
@@ -190,7 +198,7 @@ def get_image(html: HTMLParser) -> str:
     return next(url for url in image_urls if "http" in url)  # type: ignore
 
 
-def get_data(cards: list[dict]) -> list[dict]:
+def get_data(cards: list[dict], headers: dict[str, str]) -> list[dict]:
     result = []
     with httpx.Client(headers=headers) as client:
         for card in cards:
@@ -223,9 +231,10 @@ def century():
 
     # Variables
     CARD_TAG = "div#row-inner-search > a"
+    headers = custom_headers
 
-    cards = get_event_cards(venues=CENTURY_VENUES, tag=CARD_TAG)
-    data = get_data(cards)
+    cards = get_event_cards(venues=CENTURY_VENUES, tag=CARD_TAG, headers=headers)
+    data = get_data(cards, headers)
     logging.warning(f"Found {len(data)} events.")
 
     export_json(data, filepath=save_path("data", "century.json"))
