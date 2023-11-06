@@ -8,7 +8,15 @@ import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import (
+    Gig,
+    custom_headers,
+    export_json,
+    get_request,
+    logger,
+    save_path,
+    timer,
+)
 
 
 class PhoenixGig(Gig):
@@ -82,7 +90,7 @@ def extract_homepage_text(response, base_url) -> str | None:
         return None
 
 
-def get_season_url(base_url: str) -> str | None:
+def get_season_url(base_url: str, headers: dict[str, str]) -> str | None:
     """
     Fetches the URL for the current season from the given base URL.
 
@@ -139,7 +147,7 @@ def extract_links(html: HTMLParser) -> list[str] | None:
     return result or None
 
 
-def get_event_urls(url: str) -> list[str] | None:
+def get_event_urls(url: str, headers: dict[str, str]) -> list[str] | None:
     """
     Executes the process of fetching event URLs from the given URL.
 
@@ -170,7 +178,7 @@ def get_image(html: HTMLParser, tag: str) -> str:
 
 
 def get_data(
-    urls: list[str], title_tag: str, date_tag: str, image_tag: str
+    urls: list[str], headers: dict[str, str], title_tag: str, date_tag: str, image_tag: str
 ) -> list[dict]:
     result = []
     with httpx.Client(headers=headers) as client:
@@ -195,22 +203,22 @@ def get_data(
 def phoenix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    # CSS Selectors
     IMAGE_TAG = "meta[property='og:image']"
     TITLE_TAG = "div.sqs-html-content > h3"
     DATE_TAG = "div.sqs-html-content > h4"
-
+    headers = custom_headers
     base_url = "https://phoenixcentralpark.com.au"
-    url = get_season_url(base_url)
+
+    url = get_season_url(base_url, headers)
     if url is None:
         sys.exit(1)
 
-    urls = get_event_urls(url)
+    urls = get_event_urls(url, headers)
     if urls is None:
         logging.error(f"No events found at {url}.")
         sys.exit(1)
 
-    data = get_data(urls, TITLE_TAG, DATE_TAG, IMAGE_TAG)
+    data = get_data(urls, headers, TITLE_TAG, DATE_TAG, IMAGE_TAG)
     logging.warning(f"Found {len(data)} events.")
 
     export_json(data, filepath=save_path("data", "phoenix.json"))
