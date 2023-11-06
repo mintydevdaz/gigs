@@ -11,7 +11,7 @@ from gigs.utils import (
     Gig,
     export_json,
     get_post_response,
-    headers,
+    custom_headers,
     logger,
     payload,
     save_path,
@@ -80,7 +80,7 @@ def extract_price_from_event(client: httpx.Client, event: dict, price_tag: str):
     return event
 
 
-def get_prices(data: list[dict], price_tag: str) -> list[dict]:
+def get_prices(data: list[dict], price_tag: str, headers: dict[str, str]) -> list[dict]:
     result = []
     with httpx.Client(headers=headers) as client:
         result.extend(
@@ -97,6 +97,7 @@ def oztix():
     PRICE_TAG = "div.ticket-price.hide-mobile"
     url = "https://personalisationapi.oztix.com.au/api/recommendations"
     json_key = "catalog"
+    headers = custom_headers
 
     response = get_post_response(url, payload)
     if response is None:
@@ -108,7 +109,7 @@ def oztix():
         sys.exit(1)
 
     initial_data = get_data(cache)
-    final_data = get_prices(initial_data, PRICE_TAG)
+    final_data = get_prices(initial_data, PRICE_TAG, headers)
     logging.warning(f"Found {len(final_data)} events.")
 
     export_json(final_data, filepath=save_path("data", "oztix.json"))
