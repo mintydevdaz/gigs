@@ -4,7 +4,7 @@ import re
 
 import httpx
 from selectolax.parser import HTMLParser
-from gigs.utils import export_json, logger, open_json, save_path, timer, headers
+from gigs.utils import export_json, logger, open_json, save_path, timer, custom_headers
 
 
 def find_lowest_price(price_list: list[str]) -> float:
@@ -32,7 +32,7 @@ def compile_price(html: HTMLParser) -> float:
         return 0.0
 
 
-def get_prices_from_events(events: list[dict]):
+def get_prices_from_events(events: list[dict], headers: dict[str, str]):
     result = []
     with httpx.Client(headers=headers) as client:
         for event in events:
@@ -52,9 +52,11 @@ def get_prices_from_events(events: list[dict]):
 def soh_fetch_price():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
+    headers = custom_headers
+
     fp_json = save_path("data", "sydney_opera_house.json")
     events = open_json(filepath=fp_json)
-    data = get_prices_from_events(events)
+    data = get_prices_from_events(events, headers)
 
     export_json(data, filepath=save_path("data", fp_json))
 

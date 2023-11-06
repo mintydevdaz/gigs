@@ -8,7 +8,15 @@ import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser, Node
 
-from gigs.utils import Gig, export_json, get_request, headers, logger, save_path, timer
+from gigs.utils import (
+    Gig,
+    custom_headers,
+    export_json,
+    get_request,
+    logger,
+    save_path,
+    timer,
+)
 
 
 class SydneyOperaHouseGig(Gig):
@@ -46,7 +54,7 @@ def page_num(html: HTMLParser) -> int | None:
         return None
 
 
-def find_last_page(base_url: str) -> int | None:
+def find_last_page(base_url: str, headers: dict[str, str]) -> int | None:
     url = f"{base_url}{0}"
     response = get_request(url, headers)
     if response is None:
@@ -56,7 +64,7 @@ def find_last_page(base_url: str) -> int | None:
     return page_num(tree)
 
 
-def get_event_cards(base_url: str, end_page: int, tag: str) -> list[Node]:
+def get_event_cards(base_url: str, headers: dict[str, str], end_page: int, tag: str) -> list[Node]:
     result = []
     with httpx.Client(headers=headers) as client:
         for page_num in range(end_page):
@@ -130,18 +138,18 @@ def get_data(cards: list, date_tag: str, title_tag: str, genre_tag: str) -> list
 def sydney_opera_house():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    # CSS Selectors
     CARD_TAG = "div.soh-card.soh-card--whats-on.soh--card"
     DATE_TAG = "time"
     TITLE_TAG = "span.soh-card__title-text"
     GENRE_TAG = "p.soh-card__category"
-
+    headers = custom_headers
     base_url = "https://www.sydneyoperahouse.com/whats-on?page="
-    end_page = find_last_page(base_url)
+
+    end_page = find_last_page(base_url, headers)
     if end_page is None:
         sys.exit(1)
 
-    cards = get_event_cards(base_url, end_page, CARD_TAG)
+    cards = get_event_cards(base_url, headers, end_page, CARD_TAG)
     if not len(cards):
         logging.error("No events found on page.")
         sys.exit(1)
