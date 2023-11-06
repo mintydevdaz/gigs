@@ -99,6 +99,10 @@ def extract_data(events: list[dict]) -> list[dict]:
 @logger(filepath=save_path("data", "app.log"))
 def ticketmaster():
     logging.warning(f"Running {os.path.basename(__file__)}")
+
+    destination_cache_file = "ticketmaster_cache.json"
+    destination_data_file = "ticketmaster.json"
+
     load_dotenv()
     api_key = str(os.getenv("TM_KEY"))
 
@@ -110,11 +114,11 @@ def ticketmaster():
     if not len(events):
         logging.error("No events found!")
         sys.exit(1)
-    export_json(events, filepath=save_path("data", "ticketmaster_cache.json"))
+    export_json(events, filepath=save_path("cache", destination_cache_file))
 
     data = extract_data(events)
     logging.warning(f"Found {len(data)} events.")
-    export_json(data, filepath=save_path("data", "ticketmaster.json"))
+    export_json(data, filepath=save_path("data", destination_data_file))
 
 
 if __name__ == "__main__":
