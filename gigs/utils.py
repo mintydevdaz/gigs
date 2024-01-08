@@ -20,6 +20,39 @@ class Gig(BaseModel):
     source: str = "-"
 
 
+class WebScraper:
+    def __init__(self) -> None:
+        pass
+
+    def export_json(self, data, filepath: str) -> None:
+        try:
+            with open(filepath, "w") as f:
+                json.dump(data, f)
+                logging.warning(f"Saved data to {filepath}.")
+        except Exception as exc:
+            logging.error(f"Error downloading JSON: {exc}")
+            return None
+
+    def _get_request(self, url: str, headers: dict[str, str]) -> httpx.Response | None:
+        """
+        Sends a GET request to the specified URL with the provided headers and returns the response.
+
+        Args:
+            url (str): The URL to send the GET request to.
+            headers (dict): The headers to include in the request.
+
+        Returns:
+            httpx.Response | None: The response object if the request is successful, or `None` if an HTTP error occurs.
+        """
+        try:
+            response = httpx.get(url, headers=headers, follow_redirects=True)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPError as exc:
+            logging.error(f"Request error occurred for URL '{url}': {exc}.")
+            return None
+
+
 def save_path(sub_dir: str, filename: str) -> str:
     """
     Returns the absolute path of a file located in a subdirectory relative to the
