@@ -8,7 +8,7 @@ import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import Gig, WebScraper, custom_headers, logger, save_path
+from gigs.utils import Gig, WebScraper, custom_headers, logger, save_path, timer
 
 
 class PhoenixGig(Gig):
@@ -109,6 +109,7 @@ class PhoenixScraper(WebScraper):
         return result
 
 
+@timer
 @logger(filepath=save_path("data", "app.log"))
 def phoenix():
     logging.warning(f"Running {os.path.basename(__file__)}")
