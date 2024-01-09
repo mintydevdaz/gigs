@@ -36,7 +36,7 @@ class TicketmasterScraper(WebScraper):
         if not events:
             return None
         logging.warning(f"Found {events.__len__()} Ticketmaster events.")
-        self.export_json(events, filepath=save_path("data", cache_file))
+        self.export_json(events, filepath=save_path("cache", cache_file))
         return events
 
     def get_data(self, events: list[dict], data_file: str) -> None:
