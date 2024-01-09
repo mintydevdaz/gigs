@@ -7,16 +7,52 @@ import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import (
-    Gig,
-    export_json,
-    get_post_response,
-    custom_headers,
-    logger,
-    payload,
-    save_path,
-    timer,
-)
+from gigs.utils import Gig, WebScraper, custom_headers, export_json, logger, save_path, timer
+
+
+class OztixScraper(WebScraper):
+    def __init__(self) -> None:
+        super().__init__()
+        self._url = "https://personalisationapi.oztix.com.au/api/recommendations"
+        self._payload = {"options": {"use": 0, "geo": None, "postcode": None}}
+        self._json_key = "catalog"
+        self.raw_data = self._build_data_from_cache()
+
+    def _create_data_cache(
+        self, response: httpx.Response, json_key: str
+    ) -> list[dict] | None:
+        if "application/json" in response.headers.get("content-type", ""):
+            return response.json().get(self._json_key)
+        logging.error("No JSON data found.")
+        return None
+
+    def _get_json_data(self) -> list[dict] | None:
+        r = self._get_post_response(self._url, self._payload)
+        return None if r is None else self._create_data_cache(r, self._json_key)
+
+    def _build_initial_dataset(self, event_data: list[dict]):
+        result = []
+        for data in event_data:
+            try:
+                gig = OztixGig(
+                    date=data["dateStart"],  # ISO8601
+                    title=data["eventName"],
+                    venue=data["venue"]["name"],
+                    suburb=data["venue"]["locality"],
+                    state=data["venue"]["state"],
+                    url=data["eventUrl"],
+                    image=data["eventImage1"],
+                )
+                result.append(gig.model_dump())
+            except Exception as exc:
+                logging.error(
+                    f"Unable to fetch data: {exc} ({data.get('EventUrl', '-')})"
+                )
+        return result
+
+    def _build_data_from_cache(self) -> list[dict] | None:
+        event_data = self._get_json_data()
+        return None if event_data is None else self._build_initial_dataset(event_data)
 
 
 class OztixGig(Gig):
@@ -27,31 +63,6 @@ class OztixGig(Gig):
         return (
             unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("utf-8")
         )
-
-
-def create_data_cache(response: httpx.Response, json_key: str) -> list[dict] | None:
-    if "application/json" in response.headers.get("content-type", ""):
-        return response.json().get(json_key)
-    return None
-
-
-def get_data(event_data: list[dict]) -> list[dict]:
-    result = []
-    for data in event_data:
-        try:
-            gig = OztixGig(
-                date=data["dateStart"],  # ISO8601
-                title=data["eventName"],
-                venue=data["venue"]["name"],
-                suburb=data["venue"]["locality"],
-                state=data["venue"]["state"],
-                url=data["eventUrl"],
-                image=data["eventImage1"],
-            )
-            result.append(gig.model_dump())
-        except Exception as exc:
-            logging.error(f"Unable to fetch data: {exc} ({data.get('EventUrl', '-')})")
-    return result
 
 
 def get_html(client: httpx.Client, url: str) -> HTMLParser | None:
@@ -86,6 +97,7 @@ def get_prices(data: list[dict], price_tag: str, headers: dict[str, str]) -> lis
         result.extend(
             extract_price_from_event(client, event, price_tag) for event in data
         )
+    logging.warning(f"Found {len(result)} Oztix events.")
     return result
 
 
@@ -94,26 +106,15 @@ def get_prices(data: list[dict], price_tag: str, headers: dict[str, str]) -> lis
 def oztix():
     logging.warning(f"Running {os.path.basename(__file__)}")
 
-    json_key = "catalog"
-    headers = custom_headers
+    raw_data = OztixScraper().raw_data
+    if raw_data is None:
+        sys.exit(1)
+
+    price_tag = "div.ticket-price.hide-mobile"
+    final_data_with_prices = get_prices(raw_data, price_tag, custom_headers)
+
     destination_file = "oztix.json"
-    PRICE_TAG = "div.ticket-price.hide-mobile"
-    url = "https://personalisationapi.oztix.com.au/api/recommendations"
-
-    response = get_post_response(url, payload)
-    if response is None:
-        sys.exit(1)
-
-    cache = create_data_cache(response, json_key)
-    if cache is None:
-        logging.error("No JSON data found.")
-        sys.exit(1)
-
-    initial_data = get_data(cache)
-    final_data = get_prices(initial_data, PRICE_TAG, headers)
-    logging.warning(f"Found {len(final_data)} events.")
-
-    export_json(final_data, filepath=save_path("data", destination_file))
+    export_json(final_data_with_prices, filepath=save_path("data", destination_file))
 
 
 if __name__ == "__main__":
