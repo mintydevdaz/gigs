@@ -4,13 +4,78 @@ import re
 import sys
 import unicodedata
 from datetime import datetime
+from typing import Any
 
 import chompjs
 import httpx
 from pydantic import field_validator
 from selectolax.parser import HTMLParser
 
-from gigs.utils import Gig, export_json, get_request, custom_headers, logger, save_path, timer
+from gigs.utils import (
+    Gig,
+    WebScraper,
+    custom_headers,
+    export_json,
+    logger,
+    save_path,
+    timer,
+)
+
+
+class EventbriteScraper(WebScraper):
+    def __init__(self) -> None:
+        super().__init__()
+        self.base_url = (
+            "https://www.eventbrite.com.au/d/australia/music--performances/?page="
+        )
+        self.headers = custom_headers
+        self.json_tag = "script[type='application/ld+json']"
+        self.javascript_tag = "script[type='text/javascript']"
+        self.dest_cache_file = "eventbrite_cache.json"
+        self.last_page = self._get_last_page()
+        self.cache_data = self._get_events()
+
+    def _get_last_page(self) -> int | None:
+        start_page = 1
+        url = f"{self.base_url}{start_page}"
+        response = self._get_request(url, self.headers)
+        if response is not None:
+            return self._parse_javascript_text(response)
+        logging.error("Unable to find last Eventbrite page.")
+        return None
+
+    def _parse_javascript_text(self, response: httpx.Response) -> int | None:
+        html = HTMLParser(response.text)
+        script_tags = html.css(self.javascript_tag)
+        text = "".join(script.text().strip() for script in script_tags).replace(" ", "")
+        if match := re.search(pattern=r'"page_count":(\d{1,3})', string=text):
+            return int(match[1]) + 1
+        else:
+            return None
+
+    def _get_events(self) -> list[dict[str, Any]] | None:
+        if self.last_page is None:
+            return None
+
+        # Extract events from each web page
+        total_events = []
+        with httpx.Client(headers=self.headers) as client:
+            for page in range(1, self.last_page):
+                url = f"{self.base_url}{page}"
+                try:
+                    r = client.get(url)
+                    html = HTMLParser(r.text)
+                    if json_tags := html.css(self.json_tag):
+                        for json in json_tags:
+                            data_obj = chompjs.parse_js_object(json.text())
+                            total_events.append(data_obj)
+                except Exception as exc:
+                    logging.error(f"Unable to parse JSON tag at URL '{url}': {exc}.")
+        logging.warning(f"Found {len(total_events)} events.")
+        self.export_json(
+            data=total_events, filepath=save_path("cache", self.dest_cache_file)
+        )
+        return total_events
 
 
 class EventbriteGig(Gig):
@@ -24,55 +89,6 @@ class EventbriteGig(Gig):
         return text.strip()
 
 
-def get_response_and_parse_html(url: str, headers: dict[str, str]) -> HTMLParser | None:
-    response = get_request(url, headers)
-    return None if response is None else HTMLParser(response.text)
-
-
-def parse_javascript_text(html: HTMLParser, tag: str):
-    script_tags = html.css(tag)
-    text = "".join(script.text().strip() for script in script_tags).replace(" ", "")
-    if match := re.search(pattern=r'"page_count":(\d{1,3})', string=text):
-        return int(match[1]) + 1
-    else:
-        return None
-
-
-def end_page(base_url: str, headers: dict[str, str], tag: str, page: int = 1) -> int | None:
-    url = f"{base_url}{page}"
-    html = get_response_and_parse_html(url, headers)
-    if html is None:
-        return None
-    page_num = parse_javascript_text(html, tag)
-    logging.warning(f"Last page number is {page_num}.")
-    return None if page_num is None else page_num
-
-
-def get_events(base_url: str, headers: dict[str, str], start_page: int, end_page: int, tag: str):
-    events = []
-    with httpx.Client(headers=headers) as client:
-        for page in range(start_page, end_page):
-            url = f"{base_url}{page}"
-            try:
-                response = client.get(url)
-                tree = HTMLParser(response.text)
-                if json_tags := tree.css(tag):
-                    for json in json_tags:
-                        data = chompjs.parse_js_object(json.text())
-                        events.append(data)
-            except Exception as exc:
-                logging.error(f"Unable to parse JSON tag at URL '{url}': {exc}.")
-    return events
-
-
-def get_date(event: dict) -> str:
-    try:
-        date_str = event["startDate"]
-        return datetime.strptime(date_str, "%Y-%m-%d").isoformat()
-    except Exception:
-        return "2099-01-01T00:00:00"
-
-
 def get_location_info(event: dict) -> tuple[str, ...]:
     try:
         venue = event["location"]["name"]
@@ -82,8 +98,15 @@ def get_location_info(event: dict) -> tuple[str, ...]:
     except Exception:
         return "-", "-", "-"
 
+def get_date(event: dict) -> str:
+    try:
+        date_str = event["startDate"]
+        return datetime.strptime(date_str, "%Y-%m-%d").isoformat()
+    except Exception:
+        return "2099-01-01T00:00:00"
 
-def get_data(events: list[dict]) -> list[dict]:
+
+def parse_cache_data(events: list[dict[str, Any]]):
     data = []
     for event in events:
         venue, suburb, state = get_location_info(event)
@@ -104,25 +127,13 @@ def get_data(events: list[dict]) -> list[dict]:
 @logger(filepath=save_path("data", "app.log"))
 def eventbrite():
     logging.warning(f"Running {os.path.basename(__file__)}")
-
-    JS_TAG = 'script[type="text/javascript"]'
-    JSON_TAG = "script[type='application/ld+json']"
-    headers = custom_headers
-    destination_cache_file = "eventbrite_cache.json"
-    destination_data_file = "eventbrite.json"
-
-    base_url = "https://www.eventbrite.com.au/d/australia/music--performances/?page="
-    last_page = end_page(base_url, headers, JS_TAG)
-    if last_page is None:
-        logging.error("Unable to get last Eventbrite page.")
+    bot = EventbriteScraper()
+    raw_data = bot.cache_data
+    if raw_data is None:
         sys.exit(1)
 
-    cache_events = get_events(base_url, headers, 1, last_page, JSON_TAG)
-    export_json(cache_events, filepath=save_path("cache", destination_cache_file))
-
-    data = get_data(cache_events)
-    logging.warning(f"Found {len(data)} events.")
-    export_json(data, filepath=save_path("data", destination_data_file))
+    clean_data = parse_cache_data(raw_data)
+    export_json(clean_data, filepath=save_path("data", "eventbrite.json"))
 
 
 if __name__ == "__main__":
