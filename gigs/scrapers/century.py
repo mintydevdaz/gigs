@@ -1,8 +1,10 @@
 import logging
 import os
 import re
+import sys
 import unicodedata
 from datetime import datetime
+from typing import Any
 
 import httpx
 from pydantic import field_validator
@@ -11,9 +13,9 @@ from selectolax.parser import HTMLParser
 from gigs.CONSTANTS import CENTURY_VENUES
 from gigs.utils import (
     Gig,
+    WebScraper,
     custom_headers,
     export_json,
-    get_request,
     logger,
     save_path,
     timer,
@@ -48,195 +50,173 @@ class CenturyGig(Gig):
             return "-"
 
 
-def get_event_cards(venues: list[dict], tag: str, headers: dict[str, str]) -> list[dict]:
-    """
-    Fetches event URLs from a list of venues based on specified tags.
+class CenturyScraper(WebScraper):
+    def __init__(self) -> None:
+        super().__init__()
+        self.venues = CENTURY_VENUES
+        self.headers = custom_headers
+        self.event_card_tag = "div#row-inner-search > a"
+        self._event_cards = self._get_event_cards()
+        self.data = self._get_data()
 
-    Args:
-        venues (list[dict]): A list of dictionaries representing venues.
-        tags (str): CSS selector tags used to filter event URLs.
+    def _get_event_cards(self) -> list[dict[str, str]] | None:
+        total_events = []
+        with httpx.Client(headers=self.headers) as client:
+            for venue in self.venues:
+                url = venue["url"]
 
-    Returns:
-        list[dict]: A list of dictionaries containing the fetched event URLs, along with venue information.
+                # fetch events from each venue's webpage
+                try:
+                    r = client.get(url)
+                    html = HTMLParser(r.text)
+                    cards = html.css(self.event_card_tag)
+                    total_events.extend(
+                        {
+                            "url": card.css_first("a").attributes["href"],
+                            "name": venue["name"],
+                            "suburb": venue["suburb"],
+                            "state": venue["state"],
+                        }
+                        for card in cards
+                    )
+                except Exception as exc:
+                    logging.error(f"Error scraping '{url}': {exc}.")
 
-    Raises:
-        Exception: If there is an error while fetching or scraping the event URLs.
+        if total_events:
+            logging.warning(f"Found {len(total_events)} events.")
+            return total_events
+        else:
+            return None
 
-    Examples:
-        >>> venues = [
-        ...     {
-        ...         "url": "https://example.com/venue1",
-        ...         "name": "Venue 1",
-        ...         "suburb": "City 1",
-        ...         "state": "State 1"
-        ...     },
-        ...     {
-        ...         "url": "https://example.com/venue2",
-        ...         "name": "Venue 2",
-        ...         "suburb": "City 2",
-        ...         "state": "State 2"
-        ...     }
-        ... ]
-        >>> tags = ".event-card"
-        >>> fetch_event_urls(venues, tags)
-        [{'url': 'https://example.com/event1', 'name': 'Venue 1', 'suburb': 'City 1', 'state': 'State 1'},
-        {'url': 'https://example.com/event2', 'name': 'Venue 2', 'suburb': 'City 2', 'state': 'State 2'}]
-    """
-    result = []
-    for venue in venues:
-        venue_url = venue["url"]
-        response = get_request(venue_url, headers)
-        if response is None:
-            logging.error(f"Error fetching response for {venue_url}.")
-            continue
+    def _get_data(self) -> list[dict[str, Any]] | None:
+        if self._event_cards is None:
+            return None
 
-        try:
-            tree = HTMLParser(response.text)
-            cards = tree.css(tag)
-            result.extend(
-                {
-                    "url": card.css_first("a").attributes["href"],
-                    "name": venue["name"],
-                    "suburb": venue["suburb"],
-                    "state": venue["state"],
-                }
-                for card in cards
-            )
-        except Exception as exc:
-            logging.error(f"Error scraping {venue_url}: {exc}.")
+        result = []
+        with httpx.Client(headers=self.headers) as client:
+            for card in self._event_cards:
+                url = card["url"]
+                try:
+                    r = client.get(url)
+                    html = HTMLParser(r.text)
+                    gig = self._build_event_object(card, html)
+                    result.append(gig)
+                except Exception as exc:
+                    logging.error(f"Unable to get data from url '{url}': {exc}.")
+        if result:
+            logging.warning(f"Successfully parsed {len(result)} events.")
+            return result
+        else:
+            return None
 
-    return result
+    def _build_event_object(self, card: dict[str, str], html: HTMLParser) -> dict:
+        obj = CenturyGig(
+            date=html.css_first("li.session-date").text(),
+            title=html.css_first("h1.title").text(),
+            price=self._get_price(text=self._extract_ticket_prices(html)),
+            genre=self._get_genre(html),
+            venue=card["name"],
+            suburb=card["suburb"],
+            state=card["state"],
+            url=card["url"],
+            image=self._get_image(html),
+        )
+        return obj.model_dump()
 
+    def _get_price(self, text: str) -> float:
+        """
+        Fetches the minimum price from a string of text containing prices.
 
-def extract_ticket_prices(tree: HTMLParser) -> str:
-    """
-    Extracts ticket prices from an HTMLParser tree.
+        Args:
+            text (str): The text containing prices.
 
-    Args:
-        tree (HTMLParser): The HTMLParser tree representing the parsed HTML.
+        Returns:
+            float: The minimum price extracted from the text. Returns 0.0 if no prices are found.
 
-    Returns:
-        str: The extracted ticket prices as a string.
+        Examples:
+            >>> text = "Ticket prices: $10, $15, $20"
+            >>> fetch_price(text)
+            10.0
+        """
+        result = re.findall(pattern=r"\d+\.\d+", string=text)
+        if len(result) == 0:
+            return 0.0
+        prices = list(map(lambda i: float(i), result))
+        return min(prices)
 
-    Examples:
-        >>> html_tree = HTMLParser(html_content)
-        >>> extract_ticket_prices(html_tree)
-        'Ticket prices: $10 - $20'
-    """
-    result = ""
-    for text in tree.css("ul.sessions"):
-        try:
-            item = text.css_first("li").text()
-            result += item
-        except AttributeError:
-            continue
-    return result
+    def _extract_ticket_prices(self, html: HTMLParser) -> str:
+        """
+        Extracts ticket prices from an HTMLParser tree.
 
+        Args:
+            tree (HTMLParser): The HTMLParser tree representing the parsed HTML.
 
-def get_price(text: str) -> float:
-    """
-    Fetches the minimum price from a string of text containing prices.
+        Returns:
+            str: The extracted ticket prices as a string.
 
-    Args:
-        text (str): The text containing prices.
-
-    Returns:
-        float: The minimum price extracted from the text. Returns 0.0 if no prices are found.
-
-    Examples:
-        >>> text = "Ticket prices: $10, $15, $20"
-        >>> fetch_price(text)
-        10.0
-    """
-    result = re.findall(pattern=r"\d+\.\d+", string=text)
-    if len(result) == 0:
-        return 0.0
-    prices = list(map(lambda i: float(i), result))
-    return min(prices)
-
-
-def get_genre(html: HTMLParser) -> str:
-    """
-    Fetches the genre from an HTMLParser object.
-
-    Args:
-        html (HTMLParser): The HTMLParser object representing the parsed HTML.
-
-    Returns:
-        str: The fetched genre. Returns "-" if the genre is not found.
-
-    Examples:
-        >>> html_tree = HTMLParser(html_content)
-        >>> fetch_genre(html_tree)
-        'Rock'
-    """
-    node = html.css_first("ul.category.inline-list").last_child
-    return "-" if node is None else node.text().strip()
-
-
-def get_image(html: HTMLParser) -> str:
-    """
-    Fetches the image URL from an HTMLParser object.
-
-    Args:
-        html (HTMLParser): The HTMLParser object representing the parsed HTML.
-
-    Returns:
-        str: The fetched image URL.
-
-    Raises:
-        StopIteration: If no image URL is found.
-
-    Examples:
-        >>> html_tree = HTMLParser(html_content)
-        >>> fetch_image(html_tree)
-        'https://example.com/image.jpg'
-    """
-    card = html.css("div#row-inner-event-hero > div.cell.small-24")
-    for img in card:
-        image_urls = img.css_first("style").text().strip().split(" ")
-    return next(url for url in image_urls if "http" in url)  # type: ignore
-
-
-def get_data(cards: list[dict], headers: dict[str, str]) -> list[dict]:
-    result = []
-    with httpx.Client(headers=headers) as client:
-        for card in cards:
+        Examples:
+            >>> html_tree = HTMLParser(html_content)
+            >>> extract_ticket_prices(html_tree)
+            'Ticket prices: $10 - $20'
+        """
+        result = ""
+        for text in html.css("ul.sessions"):
             try:
-                response = client.get(card["url"])
-                tree = HTMLParser(response.text)
-                gig = CenturyGig(
-                    date=tree.css_first("li.session-date").text(),
-                    title=tree.css_first("h1.title").text(),
-                    price=get_price(text=extract_ticket_prices(tree)),
-                    genre=get_genre(tree),
-                    venue=card["name"],
-                    suburb=card["suburb"],
-                    state=card["state"],
-                    url=card["url"],
-                    image=get_image(tree),
-                )
-                result.append(gig.model_dump())
-            except Exception as exc:
-                logging.error(
-                    f"Unable to extract data from URL '{card['url']}': {exc}."
-                )
-    return result
+                item = text.css_first("li").text()
+                result += item
+            except AttributeError:
+                continue
+        return result
+
+    def _get_genre(self, html: HTMLParser) -> str:
+        """
+        Fetches the genre from an HTMLParser object.
+
+        Args:
+            html (HTMLParser): The HTMLParser object representing the parsed HTML.
+
+        Returns:
+            str: The fetched genre. Returns "-" if the genre is not found.
+
+        Examples:
+            >>> html_tree = HTMLParser(html_content)
+            >>> fetch_genre(html_tree)
+            'Rock'
+        """
+        node = html.css_first("ul.category.inline-list").last_child
+        return "-" if node is None else node.text().strip()
+
+    def _get_image(self, html: HTMLParser) -> str:
+        """
+        Fetches the image URL from an HTMLParser object.
+
+        Args:
+            html (HTMLParser): The HTMLParser object representing the parsed HTML.
+
+        Returns:
+            str: The fetched image URL.
+
+        Raises:
+            StopIteration: If no image URL is found.
+
+        Examples:
+            >>> html_tree = HTMLParser(html_content)
+            >>> fetch_image(html_tree)
+            'https://example.com/image.jpg'
+        """
+        card = html.css("div#row-inner-event-hero > div.cell.small-24")
+        for img in card:
+            image_urls = img.css_first("style").text(strip=True).split(" ")
+        return next(url for url in image_urls if "http" in url)  # type: ignore
 
 
 @timer
 @logger(filepath=save_path("data", "app.log"))
 def century():
     logging.warning(f"Running {os.path.basename(__file__)}")
-
-    # Variables
-    CARD_TAG = "div#row-inner-search > a"
-    headers = custom_headers
-
-    cards = get_event_cards(venues=CENTURY_VENUES, tag=CARD_TAG, headers=headers)
-    data = get_data(cards, headers)
-    logging.warning(f"Found {len(data)} events.")
-
+    data = CenturyScraper().data
+    if data is None:
+        sys.exit(1)
     export_json(data, filepath=save_path("data", "century.json"))
 
 
