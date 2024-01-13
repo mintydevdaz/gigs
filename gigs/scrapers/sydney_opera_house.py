@@ -23,7 +23,7 @@ class SOHScraper(WebScraper):
     def __init__(self) -> None:
         super().__init__()
         self.home_url = "https://www.sydneyoperahouse.com"
-        self.base_url = "https://www.sydneyoperahouse.com/whats-on?page="
+        self.base_url = f"{self.home_url}/whats-on?page="
         self._headers = custom_headers
         self._card_tag = "div.soh-card.soh-card--whats-on.soh--card"
         self._date_tag = "time"
