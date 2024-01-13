@@ -1,133 +1,106 @@
 import logging
 import os
 import smtplib
-from email.message import EmailMessage
 from datetime import datetime, time
+from email.message import EmailMessage
 
 from dotenv import load_dotenv
+
 from gigs.CONTACTS import CONTACTS
 from gigs.utils import logger, save_path, timer
 
 
-def open_text_file(filepath: str) -> str:
+class MailClient:
+    def __init__(self) -> None:
+        load_dotenv()
+        self._sender = str(os.getenv("SENDER"))
+        self._password = str(os.getenv("PASSWORD"))
+        self._csv_file = save_path("gigs/data_files", "annual_gigs.csv")
+        self._html_text_file = save_path("gigs/data_files", "html.txt")
+        self.contacts = CONTACTS["test"]  # ! toggle -> test / actual
+        self.month = self._current_month()
+        self.subject = self._create_subject()
+        self.greeting = self._create_greeting()
+        self.html_table = self._open_text_file()
+
+    def _current_month(self) -> str:
+        return datetime.now().strftime("%B")
+
+    def _create_subject(self) -> str:
+        return f"Gigs ~ {self.month}"
+
+    def _create_greeting(self) -> str:
+        now = datetime.now().time()
+        midday = time(12, 0, 0)
+        evening = time(18, 0, 0)
+        if now < midday:
+            return "Good morning"
+        elif now < evening:
+            return "Good afternoon"
+        else:
+            return "Good evening"
+
+    def _open_text_file(self) -> str:
+        with open(self._html_text_file, "r") as f:
+            text = f.read()
+        return text
+
+    def _build_email_body(
+        self, name: str, greeting: str, month: str, table: str
+    ) -> str:
+        return f"""
+    <!DOCTYPE html>
+    <html>
+        <body style='font-family: Helvetica, Arial, sans-serif; font-size: 14px;'>
+            <p>{greeting} {name},</p>
+            <p>Below is the list of gigs for the next 30 days, starting in {month}.
+            Attached is a more comprehensive list for the next year. You may find more gigs
+            here:</p>
+                <ul>
+                    <li><a href="https://sydneymusic.net">Sydney Music</a></li>
+                </ul>
+            <p>Let me know if there are others interested in receiving this email!</p>
+            <p>Love,<br>Daz</p>
+            <br>
+            {table}
+        </body>
+    </html>
     """
-    Reads the contents of a file and returns it as a string.
 
-    This function takes a file path as input, opens the file in read mode, reads its
-    contents, and returns the contents as a string.
+    def postman(self):
+        with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
+            server.starttls()
+            server.login(user=self._sender, password=self._password)
+            logging.warning("Logged into Gmail ~ sending emails...")
 
-    Args:
-        filepath (str): The path to the file.
+            for name, client_email in self.contacts.items():
+                body_text = self._build_email_body(
+                    name, self.greeting, self.month, self.html_table
+                )
 
-    Returns:
-        str: The contents of the file as a string.
-    """
-    with open(filepath, "r") as f:
-        text = f.read()
-    return text
-
-
-def salutation(now: time) -> str:
-    midday = time(12, 0, 0)
-    evening = time(18, 0, 0)
-    if now < midday:
-        return "Good morning"
-    elif now < evening:
-        return "Good afternoon"
-    else:
-        return "Good evening"
-
-
-def current_month(now: datetime) -> str:
-    return now.strftime("%B")
-
-
-def create_subject(month: str) -> str:
-    return f"Gigs ~ {month}"
-
-
-def build_html_body(name: str, greeting: str, month: str, table: str):
-    return f"""
-<!DOCTYPE html>
-<html>
-    <body style='font-family: Helvetica, Arial, sans-serif; font-size: 14px;'>
-        <p>{greeting} {name},</p>
-        <p>Below is the list of gigs for the next 30 days, starting in {month}.
-        Attached is a more comprehensive list for the next year. You may find more gigs
-        here:</p>
-            <ul>
-                <li><a href="https://sydneymusic.net">Sydney Music</a></li>
-            </ul>
-        <p>Let me know if there are others interested in receiving this email!</p>
-        <p>Love,<br>Daz</p>
-        <br>
-        {table}
-    </body>
-</html>
-"""
-
-
-def create_email(
-    server,
-    from_email: str,
-    to_email: str,
-    subject: str,
-    greeting: str,
-    name: str,
-    month: str,
-    table: str,
-    attachment_fp: str,
-) -> None:
-    body_text = build_html_body(name, greeting, month, table)
-
-    msg = EmailMessage()
-    msg["From"] = from_email
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.set_content(body_text, subtype="html")
-
-    with open(attachment_fp, "rb") as f:
-        content = f.read()
-        msg.add_attachment(
-            content, maintype="application", subtype="csv", filename="annual_gigs.csv"
-        )
-    server.send_message(msg)
+                msg = EmailMessage()
+                msg["From"] = self._sender
+                msg["To"] = client_email
+                msg["Subject"] = self.subject
+                msg.set_content(body_text, subtype="html")
+                with open(self._csv_file, "rb") as f:
+                    content = f.read()
+                    msg.add_attachment(
+                        content,
+                        maintype="application",
+                        subtype="csv",
+                        filename="annual_gigs.csv",
+                    )
+                server.send_message(msg)
+                logging.warning(f"-> {name} ~ {client_email}")
 
 
 @timer
 @logger(filepath=save_path("gigs/data", "app.log"))
 def send_email():
-    load_dotenv()
-    SENDER = str(os.getenv("SENDER"))
-    PASSWORD = str(os.getenv("PASSWORD"))
-
-    # Load Variables
-    month = current_month(now=datetime.now())
-    subject = create_subject(month)
-    greeting = salutation(now=datetime.now().time())
-    table = open_text_file(filepath=save_path("gigs/data_files", "html.txt"))
-    contacts = CONTACTS["actual"]
-    csv_file = save_path("gigs/data_files", "annual_gigs.csv")
-
-    # Send emails
-    with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
-        server.starttls()
-        server.login(user=SENDER, password=PASSWORD)
-        logging.warning("Logged into Gmail Account. Sending emails...")
-
-        for name, client_email in contacts.items():
-            create_email(
-                server,
-                from_email=SENDER,
-                to_email=client_email,
-                subject=subject,
-                greeting=greeting,
-                name=name,
-                month=month,
-                table=table,
-                attachment_fp=csv_file,
-            )
-            logging.warning(f"-> {name} ~ {client_email}")
+    logging.warning(f"Running {os.path.basename(__file__)}")
+    mail = MailClient()
+    mail.postman()
 
 
 if __name__ == "__main__":
